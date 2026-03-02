@@ -59,7 +59,12 @@ export default async function handler(req, res) {
     // Generate unique filename
     const timestamp = Date.now();
     const ext = contentType.includes('webm') ? 'webm' : 'mp4';
-    const key = `ark-analisi/${filename || `video_${timestamp}`}.${ext}`;
+    
+    // Remove existing extension if present to avoid double extension
+    let baseName = filename || `video_${timestamp}`;
+    baseName = baseName.replace(/\.(webm|mp4|mov|avi)$/i, '');
+    
+    const key = `ark-analisi/${baseName}.${ext}`;
 
     // Upload to R2
     await R2.send(new PutObjectCommand({
