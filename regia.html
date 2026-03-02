@@ -512,37 +512,56 @@
       cam.pc = pc;
       
       pc.ontrack = (e) => {
-        console.log(`[${camId}] Video received!`, e.streams[0]?.getTracks());
-        cam.stream = e.streams[0];
+        const stream = e.streams[0];
+        const tracks = stream?.getTracks() || [];
+        console.log(`[${camId}] ontrack:`, {
+          hasStream: !!stream,
+          trackCount: tracks.length,
+          tracks: tracks.map(t => ({ kind: t.kind, enabled: t.enabled, muted: t.muted, readyState: t.readyState }))
+        });
         
-        // Get elements dynamically (slot might have been recreated)
+        if (!stream || tracks.length === 0) {
+          console.error(`[${camId}] No stream or tracks!`);
+          return;
+        }
+        
+        cam.stream = stream;
+        
+        // Get elements dynamically
         const videoEl = document.getElementById(`video-${camId}`);
         const noVideoEl = document.getElementById(`novideo-${camId}`);
         
         if (!videoEl) {
-          console.warn(`[${camId}] Video element not found!`);
+          console.error(`[${camId}] Video element not found in DOM!`);
           return;
         }
         
-        videoEl.srcObject = e.streams[0];
+        console.log(`[${camId}] Setting srcObject on video element`, { 
+          videoElExists: !!videoEl,
+          videoElParent: videoEl.parentElement?.id,
+          videoElInDOM: document.body.contains(videoEl)
+        });
         
-        // Force play with retry
-        const tryPlay = () => {
-          videoEl.play().then(() => {
-            console.log(`[${camId}] Video playing`);
-            if (noVideoEl) noVideoEl.style.display = 'none';
-            document.getElementById(`slot-${camId}`)?.classList.add('connected');
-            document.getElementById(`dot-${camId}`).className = 'status-dot ready';
-          }).catch(err => {
-            console.warn(`[${camId}] Video play failed:`, err);
-            // Retry with muted after small delay
-            videoEl.muted = true;
-            setTimeout(() => videoEl.play().catch(() => {}), 100);
+        videoEl.srcObject = stream;
+        noVideoEl.style.display = 'none';
+        
+        videoEl.onloadedmetadata = () => {
+          console.log(`[${camId}] Video metadata loaded:`, {
+            width: videoEl.videoWidth,
+            height: videoEl.videoHeight,
+            duration: videoEl.duration
           });
         };
         
-        // Small delay to ensure element is in DOM
-        setTimeout(tryPlay, 50);
+        // Force play
+        videoEl.muted = true;
+        videoEl.play().then(() => {
+          console.log(`[${camId}] ✅ Video playing!`);
+          document.getElementById(`slot-${camId}`)?.classList.add('connected');
+          document.getElementById(`dot-${camId}`).className = 'status-dot ready';
+        }).catch(err => {
+          console.error(`[${camId}] ❌ Play failed:`, err.name, err.message);
+        });
       };
       
       pc.onicecandidate = async (e) => {
