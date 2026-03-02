@@ -116,20 +116,15 @@
   <div class="setup" id="setup">
     <div class="logo">📷</div>
     <h1>ARK Camera</h1>
-    <p>Camera con analisi posturale in tempo reale</p>
-    <input type="text" id="athleteName" placeholder="👤 Nome Atleta">
+    <p>Seleziona la posizione di questa camera</p>
     <select id="position">
       <option value="frontale">📍 Frontale</option>
-      <option value="laterale">📍 Laterale</option>
+      <option value="laterale-sx">📍 Laterale SX</option>
+      <option value="laterale-dx">📍 Laterale DX</option>
       <option value="posteriore">📍 Posteriore</option>
     </select>
-    <select id="movement">
-      <option value="squat">🏋️ Squat</option>
-      <option value="deadlift">💪 Deadlift</option>
-      <option value="press">🔥 Press</option>
-      <option value="pullup">🔥 Pull-up</option>
-    </select>
     <button class="btn btn-primary" onclick="start()">📹 Avvia Camera</button>
+    <p style="margin-top:20px;font-size:12px;color:#666">La posizione verrà salvata per questo dispositivo</p>
     <p class="loading" id="loadingText" style="display:none">Caricamento AI...</p>
   </div>
   
@@ -182,6 +177,14 @@
     const params = new URLSearchParams(location.search);
     const sessionId = params.get('s');
     
+    // Check for saved position - auto-start if exists
+    const savedPosition = localStorage.getItem('arkCamera_position');
+    if (savedPosition) {
+      document.getElementById('position').value = savedPosition;
+      // Auto-start after short delay to let page render
+      setTimeout(() => start(true), 500);
+    }
+    
     let camId = null;
     let athleteName = '';
     let position = '';
@@ -227,14 +230,21 @@
       document.getElementById('timer').textContent = `${min}:${sec}`;
     }
     
-    window.start = async () => {
-      athleteName = document.getElementById('athleteName').value.trim() || 'Atleta';
-      position = document.getElementById('position').value;
-      movement = document.getElementById('movement').value;
+    window.start = async (autoStart = false) => {
+      // Get position from form or localStorage
+      const posSelect = document.getElementById('position');
+      position = posSelect.value;
+      
+      // Save position to localStorage for this device
+      localStorage.setItem('arkCamera_position', position);
+      
+      // Movement will come from regia command, default to squat
+      movement = 'squat';
+      athleteName = `Camera ${position}`;
       
       const loadingText = document.getElementById('loadingText');
       loadingText.style.display = 'block';
-      loadingText.textContent = 'Avvio camera...';
+      loadingText.textContent = autoStart ? 'Riconnessione...' : 'Avvio camera...';
       
       try {
         stream = await navigator.mediaDevices.getUserMedia({
