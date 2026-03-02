@@ -274,10 +274,18 @@
     function listenForViewer(viewerId) {
       const offerPath = `streams/${camId}/${viewerId}Offer`;
       
+      log(`Listening for ${viewerId} offers at: ${offerPath}`);
+      document.getElementById('connInfo').textContent = `Listening for ${viewerId}...`;
+      
       DB.listen(offerPath, async (offer) => {
-        if (!offer) return;
+        log(`Firebase event for ${viewerId}: ${offer ? 'GOT OFFER' : 'null'}`);
         
-        log(`Offer from ${viewerId}`);
+        if (!offer) {
+          return;
+        }
+        
+        log(`Offer received from ${viewerId}!`);
+        document.getElementById('connInfo').textContent = `Connecting to ${viewerId}...`;
         
         // Cleanup old connection
         if (viewers.has(viewerId)) {
@@ -286,7 +294,12 @@
           old.pc?.close();
         }
         
-        await createPeerConnection(viewerId, offer);
+        try {
+          await createPeerConnection(viewerId, offer);
+        } catch (e) {
+          log(`Error creating connection: ${e.message}`);
+          document.getElementById('connInfo').textContent = `Error: ${e.message}`;
+        }
       });
     }
     

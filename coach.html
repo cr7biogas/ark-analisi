@@ -327,8 +327,18 @@
       });
     };
     
+    // Test Firebase connection
+    console.log('Testing Firebase connection...');
+    DB.set('test/ping', { time: Date.now() }).then(() => {
+      console.log('✅ Firebase write OK');
+    }).catch(e => {
+      console.error('❌ Firebase write FAILED:', e);
+    });
+    
     // Listen for cameras
+    console.log('Listening for cameras at: streams');
     DB.listen('streams', async (data) => {
+      console.log('Streams data received:', data ? Object.keys(data).length + ' cameras' : 'null');
       if (!data) {
         cameras.clear();
         updateGrid();
@@ -517,7 +527,10 @@
       pc.addTransceiver('video', { direction: 'recvonly' });
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
+      
+      console.log(`[${camId}] Sending offer to: streams/${camId}/coachOffer`);
       await DB.set(`streams/${camId}/coachOffer`, { type: offer.type, sdp: offer.sdp });
+      console.log(`[${camId}] Offer sent!`);
       
       // Store unsubscribers for cleanup
       cam.unsubscribers = cam.unsubscribers || [];
