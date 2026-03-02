@@ -170,12 +170,25 @@
     .qr-box {
       text-align: center;
       padding: 15px;
-      background: #fff;
+      background: var(--bg-card);
       border-radius: var(--radius-sm);
       margin-bottom: 15px;
     }
     
-    .qr-box canvas { width: 150px; height: 150px; }
+    .qr-box .qr-placeholder {
+      width: 150px;
+      height: 150px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.1);
+      border-radius: 10px;
+      font-size: 40px;
+    }
+    
+    .qr-box .qr-text { font-size: 12px; color: #888; margin-top: 10px; }
     
     .status-list { margin-top: 15px; }
     
@@ -201,8 +214,6 @@
     
     @keyframes pulse { 50% { opacity: 0.5; } }
   </style>
-  <!-- QR Code library (no COEP issues) -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
   <div class="header">
@@ -252,7 +263,8 @@
         <div>
           <h3>📱 Connetti Camera</h3>
           <div class="qr-box">
-            <canvas id="qrCanvas"></canvas>
+            <div class="qr-placeholder">📱</div>
+            <div class="qr-text">Condividi il link qui sotto</div>
           </div>
           <div class="link-box">
             <input type="text" id="cameraLink" readonly>
@@ -295,16 +307,9 @@
       globalMovement = movementSelect.value;
     });
     
-    // Camera link & QR (generated locally, no external API)
+    // Camera link
     const cameraUrl = `${location.origin}/camera.html?s=${sessionId}`;
     document.getElementById('cameraLink').value = cameraUrl;
-    
-    // Generate QR locally
-    QRCode.toCanvas(document.getElementById('qrCanvas'), cameraUrl, {
-      width: 150,
-      margin: 1,
-      color: { dark: '#000', light: '#fff' }
-    });
     
     window.copyLink = () => {
       navigator.clipboard.writeText(cameraUrl);
