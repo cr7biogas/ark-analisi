@@ -8,7 +8,7 @@
   <style>
     .main-layout {
       display: grid;
-      grid-template-columns: 1fr 350px;
+      grid-template-columns: 1fr 300px;
       gap: 20px;
       min-height: calc(100vh - 70px);
     }
@@ -21,102 +21,139 @@
     .control-panel {
       background: linear-gradient(135deg, #1a1a2e, #16213e);
       border-radius: var(--radius);
-      padding: 30px;
+      padding: 20px;
       text-align: center;
       margin-bottom: 20px;
-    }
-    
-    .big-button {
-      width: 200px;
-      height: 200px;
-      border-radius: 50%;
-      border: none;
-      font-size: 48px;
-      cursor: pointer;
-      transition: all 0.3s;
-      margin: 20px auto;
       display: flex;
       align-items: center;
-      justify-content: center;
-    }
-    
-    .big-button.start {
-      background: linear-gradient(135deg, #2ecc71, #27ae60);
-      box-shadow: 0 10px 40px rgba(46, 204, 113, 0.4);
-    }
-    
-    .big-button.stop {
-      background: linear-gradient(135deg, #e94560, #c0392b);
-      box-shadow: 0 10px 40px rgba(233, 69, 96, 0.4);
-      animation: pulse-red 1s infinite;
-    }
-    
-    .big-button:hover { transform: scale(1.05); }
-    .big-button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-    
-    @keyframes pulse-red {
-      0%, 100% { box-shadow: 0 10px 40px rgba(233, 69, 96, 0.4); }
-      50% { box-shadow: 0 10px 60px rgba(233, 69, 96, 0.6); }
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 15px;
     }
     
     .timer-display {
-      font-size: 72px;
+      font-size: 48px;
       font-weight: 800;
       font-family: monospace;
-      margin: 20px 0;
     }
     
     .timer-display.recording { color: #e94560; }
     
-    .status-text {
-      font-size: 18px;
-      color: var(--text-secondary);
-      margin-bottom: 20px;
+    .control-buttons {
+      display: flex;
+      gap: 10px;
     }
     
-    /* Camera Grid */
+    .big-btn {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: none;
+      font-size: 32px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .big-btn.start { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+    .big-btn.stop { background: linear-gradient(135deg, #e94560, #c0392b); }
+    .big-btn:hover { transform: scale(1.1); }
+    .big-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    
+    /* Camera Grid with Video */
     .camera-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
       gap: 15px;
     }
     
-    .camera-card {
+    .camera-slot {
       background: var(--bg-secondary);
       border-radius: var(--radius);
-      padding: 20px;
+      overflow: hidden;
+      border: 3px solid transparent;
+    }
+    
+    .camera-slot.connected { border-color: #2ecc71; }
+    .camera-slot.recording { border-color: #e94560; }
+    
+    .camera-slot .slot-header {
+      padding: 10px 15px;
+      background: var(--bg-card);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .camera-slot .slot-title {
+      font-weight: 600;
       display: flex;
       align-items: center;
-      gap: 15px;
-      border: 2px solid transparent;
+      gap: 8px;
     }
     
-    .camera-card.ready { border-color: #2ecc71; }
-    .camera-card.recording { border-color: #e94560; background: rgba(233, 69, 96, 0.1); }
-    .camera-card.uploading { border-color: #f1c40f; }
-    .camera-card.uploaded { border-color: #3498db; }
-    
-    .camera-card .icon { font-size: 36px; }
-    .camera-card .info { flex: 1; }
-    .camera-card .name { font-weight: 600; font-size: 16px; }
-    .camera-card .meta { color: var(--text-secondary); font-size: 13px; }
-    .camera-card .status-badge {
-      padding: 5px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
+    .camera-slot .video-area {
+      aspect-ratio: 16/9;
+      background: #000;
+      position: relative;
     }
     
-    .camera-card .status-badge.ready { background: #2ecc71; color: #000; }
-    .camera-card .status-badge.recording { background: #e94560; }
-    .camera-card .status-badge.uploading { background: #f1c40f; color: #000; }
-    .camera-card .status-badge.uploaded { background: #3498db; }
+    .camera-slot video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .camera-slot canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    
+    .camera-slot .score-badge {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 10px 20px;
+      border-radius: var(--radius);
+      text-align: center;
+    }
+    
+    .camera-slot .score-badge .score {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--accent);
+    }
+    
+    .camera-slot .score-badge .label {
+      font-size: 10px;
+      color: #888;
+    }
+    
+    .camera-slot .no-video {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+    }
+    
+    .camera-slot .no-video .icon { font-size: 48px; margin-bottom: 10px; }
     
     .empty-cameras {
       text-align: center;
-      padding: 40px;
+      padding: 60px 40px;
       color: var(--text-secondary);
+      background: var(--bg-secondary);
+      border-radius: var(--radius);
     }
+    
+    .empty-cameras .icon { font-size: 60px; margin-bottom: 15px; }
     
     /* Sidebar */
     .sidebar {
@@ -126,11 +163,11 @@
     }
     
     .sidebar h3 {
-      font-size: 16px;
-      margin-bottom: 15px;
+      font-size: 15px;
+      margin-bottom: 12px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
     
     .link-box {
@@ -140,63 +177,53 @@
       margin-bottom: 15px;
     }
     
-    .link-box input {
-      font-size: 12px;
-      margin-bottom: 10px;
-    }
+    .link-box input { font-size: 11px; margin-bottom: 8px; }
+    .link-box .btn { width: 100%; margin-bottom: 5px; }
     
-    .link-box .btn { width: 100%; }
-    
-    .movement-select {
-      margin-bottom: 20px;
-    }
-    
-    .athlete-input {
-      margin-bottom: 20px;
-    }
-    
-    /* Session History */
-    .session-item {
-      background: var(--bg-card);
-      border-radius: var(--radius-sm);
+    .qr-box {
+      text-align: center;
       padding: 15px;
-      margin-bottom: 10px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    
-    .session-item:hover { background: rgba(0, 212, 170, 0.1); }
-    
-    .session-item .time { color: var(--text-secondary); font-size: 12px; }
-    .session-item .info { margin-top: 5px; }
-    
-    /* Results */
-    .results-panel {
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 1px solid var(--border);
-    }
-    
-    .result-card {
-      background: linear-gradient(135deg, rgba(0, 212, 170, 0.1), rgba(0, 153, 255, 0.1));
-      border-radius: var(--radius);
-      padding: 20px;
+      background: #fff;
+      border-radius: var(--radius-sm);
       margin-bottom: 15px;
     }
     
-    .result-card h4 { margin-bottom: 10px; }
-    .result-card .link { 
-      word-break: break-all; 
-      color: var(--accent); 
-      font-size: 13px;
+    .qr-box img { width: 150px; height: 150px; }
+    
+    .status-list {
+      margin-top: 15px;
     }
+    
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+    }
+    
+    .status-item .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    
+    .status-item .dot.ready { background: #2ecc71; }
+    .status-item .dot.recording { background: #e94560; animation: pulse 1s infinite; }
+    .status-item .dot.connecting { background: #f1c40f; animation: pulse 1s infinite; }
+    
+    @keyframes pulse { 50% { opacity: 0.5; } }
   </style>
 </head>
 <body>
   <div class="header">
     <a href="index.html" class="back">←</a>
     <h1>🎬 Regia</h1>
-    <span id="sessionId" style="margin-left:auto;color:var(--text-secondary);font-size:13px"></span>
+    <span style="margin-left:auto;color:var(--text-secondary);font-size:13px">
+      <span id="cameraCount">0</span> camere
+    </span>
   </div>
   
   <div class="container">
@@ -204,109 +231,92 @@
       <div class="main-content">
         <!-- Control Panel -->
         <div class="control-panel">
-          <div class="status-text" id="statusText">Configura la sessione e connetti le camere</div>
+          <div>
+            <select id="movementSelect" style="padding:10px 15px;border-radius:8px;background:var(--bg-card);color:#fff;border:1px solid #444;">
+              <option value="">-- Movimento --</option>
+            </select>
+          </div>
           
           <div class="timer-display" id="timer">00:00</div>
           
-          <button class="big-button start" id="mainButton" onclick="toggleRecording()" disabled>
-            ▶️
-          </button>
-          
-          <p style="color:#888;font-size:14px" id="buttonHint">Connetti almeno una camera per iniziare</p>
-        </div>
-        
-        <!-- Connected Cameras -->
-        <div class="card">
-          <h2>📱 Camere Connesse (<span id="cameraCount">0</span>)</h2>
-          <div class="camera-grid" id="cameraGrid">
-            <div class="empty-cameras">
-              <p>📱 Nessuna camera connessa</p>
-              <p style="font-size:13px;margin-top:10px">Condividi il link camera con i telefoni</p>
-            </div>
+          <div class="control-buttons">
+            <button class="big-btn start" id="startBtn" onclick="startRecording()" disabled title="Start">▶️</button>
+            <button class="big-btn stop" id="stopBtn" onclick="stopRecording()" disabled title="Stop">⏹</button>
           </div>
         </div>
         
-        <!-- Recent Sessions -->
-        <div class="card" id="sessionsCard" style="display:none">
-          <h2>📋 Sessioni Recenti</h2>
-          <div id="sessionsList"></div>
+        <!-- Camera Grid -->
+        <div id="cameraContainer">
+          <div class="empty-cameras" id="emptyState">
+            <div class="icon">📱</div>
+            <h3>Nessuna camera connessa</h3>
+            <p>Scansiona il QR code con i telefoni per connetterli</p>
+          </div>
+          
+          <div class="camera-grid" id="cameraGrid" style="display:none"></div>
         </div>
       </div>
       
       <div class="sidebar">
         <div>
-          <h3>⚙️ Configurazione</h3>
-          
-          <div class="athlete-input">
-            <label style="font-size:13px;color:#888;display:block;margin-bottom:6px">Nome Atleta</label>
-            <input type="text" id="athleteName" placeholder="Es: Mario Rossi">
+          <h3>📱 Connetti Camera</h3>
+          <div class="qr-box">
+            <img id="qrImage" src="" alt="QR Code">
           </div>
-          
-          <div class="movement-select">
-            <label style="font-size:13px;color:#888;display:block;margin-bottom:6px">Movimento</label>
-            <select id="movementSelect">
-              <option value="">-- Seleziona Movimento --</option>
-            </select>
+          <div class="link-box">
+            <input type="text" id="cameraLink" readonly>
+            <button class="btn btn-secondary" onclick="copyLink()">📋 Copia</button>
+            <button class="btn" style="background:#25D366" onclick="shareLink()">📱 WhatsApp</button>
           </div>
         </div>
         
         <div>
-          <h3>📱 Link Camera</h3>
-          <div class="link-box">
-            <input type="text" id="cameraLink" readonly value="">
-            <button class="btn btn-secondary" onclick="copyLink()">📋 Copia Link</button>
-            <button class="btn btn-secondary mt-1" onclick="shareLink()" style="background:#25D366">📱 WhatsApp</button>
-            <button class="btn btn-secondary mt-1" onclick="showQR()">📲 QR Code</button>
+          <h3>📊 Camere</h3>
+          <div class="status-list" id="statusList">
+            <p style="color:#666;font-size:13px;text-align:center">In attesa...</p>
           </div>
         </div>
-        
-        <div class="results-panel" id="resultsPanel" style="display:none">
-          <h3>📊 Risultati</h3>
-          <div id="resultsList"></div>
-        </div>
       </div>
-    </div>
-  </div>
-  
-  <!-- QR Modal -->
-  <div id="qrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:1000;align-items:center;justify-content:center;">
-    <div style="background:#fff;padding:30px;border-radius:20px;text-align:center;">
-      <img id="qrImage" style="width:250px;height:250px;">
-      <p style="margin-top:15px;color:#000">Scansiona per aprire la camera</p>
-      <button onclick="document.getElementById('qrModal').style.display='none'" style="margin-top:15px;padding:10px 30px;border-radius:10px;border:none;background:#333;color:#fff;cursor:pointer">Chiudi</button>
     </div>
   </div>
 
   <script type="module">
     import { DB } from './firebase-config.js';
+    import { PoseEngine, SkeletonRenderer } from './lib/pose-engine.js';
     import { getAllMovements } from './lib/movement-db.js';
+    import { ScoreCalculator, getGrade } from './lib/scoring.js';
+    
+    const ICE_SERVERS = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
+    ];
     
     // State
-    let sessionId = null;
-    let cameras = new Map();
+    let sessionId = 'ses_' + Date.now().toString(36);
+    const cameras = new Map();
     let isRecording = false;
     let recordingStartTime = null;
     let timerInterval = null;
-    
-    // Elements
-    const mainButton = document.getElementById('mainButton');
-    const timer = document.getElementById('timer');
-    const statusText = document.getElementById('statusText');
-    const buttonHint = document.getElementById('buttonHint');
+    let globalMovement = 'squat';
     
     // Setup movements
     const movements = getAllMovements();
     const movementSelect = document.getElementById('movementSelect');
-    movementSelect.innerHTML = '<option value="">-- Seleziona Movimento --</option>' +
+    movementSelect.innerHTML = '<option value="">-- Movimento --</option>' +
       movements.map(m => `<option value="${m.id}">${m.icon} ${m.name}</option>`).join('');
+    movementSelect.value = 'squat';
+    globalMovement = 'squat';
     
-    // Generate session ID
-    sessionId = 'ses_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4);
-    document.getElementById('sessionId').textContent = `ID: ${sessionId}`;
+    movementSelect.addEventListener('change', () => {
+      globalMovement = movementSelect.value;
+    });
     
-    // Camera link
+    // Camera link & QR
     const cameraUrl = `${location.origin}/camera.html?s=${sessionId}`;
     document.getElementById('cameraLink').value = cameraUrl;
+    document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(cameraUrl)}`;
     
     window.copyLink = () => {
       navigator.clipboard.writeText(cameraUrl);
@@ -314,257 +324,375 @@
     };
     
     window.shareLink = () => {
-      const text = '📱 Apri questo link per connetterti come camera:\n\n';
+      const text = '📱 Connettiti come camera per analisi:\n\n';
       window.open(`https://wa.me/?text=${encodeURIComponent(text + cameraUrl)}`, '_blank');
     };
     
-    window.showQR = () => {
-      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(cameraUrl)}`;
-      document.getElementById('qrImage').src = qrUrl;
-      document.getElementById('qrModal').style.display = 'flex';
-    };
-    
     // Listen for cameras
-    DB.listen('cameras', (data) => {
-      cameras.clear();
+    DB.listen('cameras', async (data) => {
+      const currentIds = new Set(cameras.keys());
+      const newData = data || {};
       
-      if (data) {
-        for (const [id, cam] of Object.entries(data)) {
-          cameras.set(id, cam);
-          
-          // Assign session to new cameras
-          if (!cam.session) {
-            DB.set(`cameras/${id}/session`, { sessionId });
-          }
+      // Add/update cameras
+      for (const [id, cam] of Object.entries(newData)) {
+        if (!cameras.has(id)) {
+          // New camera
+          cameras.set(id, {
+            info: cam,
+            pc: null,
+            stream: null,
+            poseEngine: null,
+            skeletonRenderer: null,
+            scoreCalculator: null,
+            analysisLoop: null
+          });
+          await createCameraSlot(id, cam);
+          await connectToCamera(id);
+        } else {
+          // Update info
+          cameras.get(id).info = cam;
+          updateCameraStatus(id, cam);
         }
       }
       
-      updateCameraGrid();
-      updateButtonState();
+      // Remove disconnected cameras
+      for (const id of currentIds) {
+        if (!newData[id]) {
+          removeCameraSlot(id);
+          cameras.delete(id);
+        }
+      }
+      
+      updateUI();
     });
     
-    function updateCameraGrid() {
+    function updateUI() {
+      const count = cameras.size;
+      document.getElementById('cameraCount').textContent = count;
+      document.getElementById('emptyState').style.display = count === 0 ? 'block' : 'none';
+      document.getElementById('cameraGrid').style.display = count > 0 ? 'grid' : 'none';
+      document.getElementById('startBtn').disabled = count === 0;
+      
+      // Update status list
+      const statusList = document.getElementById('statusList');
+      if (count === 0) {
+        statusList.innerHTML = '<p style="color:#666;font-size:13px;text-align:center">In attesa...</p>';
+      } else {
+        statusList.innerHTML = Array.from(cameras.entries()).map(([id, cam]) => {
+          const status = cam.info?.status || 'connecting';
+          const statusClass = status === 'recording' ? 'recording' : status === 'ready' ? 'ready' : 'connecting';
+          return `
+            <div class="status-item">
+              <span class="dot ${statusClass}"></span>
+              <span style="flex:1">${cam.info?.name || 'Camera'}</span>
+              <span style="color:#888;font-size:12px">${cam.info?.position || ''}</span>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+    
+    async function createCameraSlot(camId, info) {
       const grid = document.getElementById('cameraGrid');
-      document.getElementById('cameraCount').textContent = cameras.size;
       
-      if (cameras.size === 0) {
-        grid.innerHTML = `
-          <div class="empty-cameras">
-            <p>📱 Nessuna camera connessa</p>
-            <p style="font-size:13px;margin-top:10px">Condividi il link camera con i telefoni</p>
-          </div>
-        `;
-        return;
-      }
-      
-      grid.innerHTML = Array.from(cameras.entries()).map(([id, cam]) => `
-        <div class="camera-card ${cam.status || 'ready'}">
-          <div class="icon">📱</div>
-          <div class="info">
-            <div class="name">${cam.name || 'Camera'}</div>
-            <div class="meta">${cam.position || 'Posizione'} · ${cam.quality || '720'}p</div>
-          </div>
-          <span class="status-badge ${cam.status || 'ready'}">${getStatusText(cam.status)}</span>
+      const slot = document.createElement('div');
+      slot.className = 'camera-slot';
+      slot.id = `slot-${camId}`;
+      slot.innerHTML = `
+        <div class="slot-header">
+          <span class="slot-title">
+            <span class="status-dot connecting" id="dot-${camId}"></span>
+            ${info.name || 'Camera'}
+          </span>
+          <span style="color:#888;font-size:12px">${info.position || ''}</span>
         </div>
-      `).join('');
+        <div class="video-area">
+          <video id="video-${camId}" autoplay playsinline muted></video>
+          <canvas id="canvas-${camId}"></canvas>
+          <div class="no-video" id="novideo-${camId}">
+            <div class="icon">📡</div>
+            <span>Connessione...</span>
+          </div>
+          <div class="score-badge" id="score-${camId}" style="display:none">
+            <div class="score">--</div>
+            <div class="label">SCORE</div>
+          </div>
+        </div>
+      `;
+      
+      grid.appendChild(slot);
     }
     
-    function getStatusText(status) {
-      const texts = {
-        ready: '✓ Pronto',
-        recording: '⏺ REC',
-        uploading: '⏳ Upload',
-        uploaded: '✓ Caricato'
+    function removeCameraSlot(camId) {
+      const cam = cameras.get(camId);
+      if (cam) {
+        cancelAnimationFrame(cam.analysisLoop);
+        cam.pc?.close();
+      }
+      
+      document.getElementById(`slot-${camId}`)?.remove();
+    }
+    
+    function updateCameraStatus(camId, info) {
+      const dot = document.getElementById(`dot-${camId}`);
+      const slot = document.getElementById(`slot-${camId}`);
+      
+      if (dot) {
+        dot.className = 'status-dot ' + (info.status === 'recording' ? 'recording' : 'ready');
+      }
+      if (slot) {
+        slot.classList.toggle('recording', info.status === 'recording');
+        slot.classList.toggle('connected', info.status === 'ready' || info.status === 'recording');
+      }
+    }
+    
+    async function connectToCamera(camId) {
+      const cam = cameras.get(camId);
+      if (!cam) return;
+      
+      const video = document.getElementById(`video-${camId}`);
+      const canvas = document.getElementById(`canvas-${camId}`);
+      const noVideo = document.getElementById(`novideo-${camId}`);
+      
+      // Clean old connection
+      if (cam.pc) {
+        cam.pc.close();
+        cam.pc = null;
+      }
+      
+      cam.unsubscribers = cam.unsubscribers || [];
+      cam.unsubscribers.forEach(fn => fn?.());
+      cam.unsubscribers = [];
+      cam.addedCandidates = new Set();
+      
+      // Clear old signaling
+      try {
+        await DB.remove(`cameras/${camId}/regiaOffer`);
+        await DB.remove(`cameras/${camId}/regiaCandidates`);
+      } catch(e) {}
+      
+      await new Promise(r => setTimeout(r, 100));
+      
+      // Create peer connection
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      cam.pc = pc;
+      
+      pc.ontrack = async (e) => {
+        console.log(`[${camId}] Video received!`);
+        cam.stream = e.streams[0];
+        video.srcObject = e.streams[0];
+        noVideo.style.display = 'none';
+        
+        document.getElementById(`slot-${camId}`)?.classList.add('connected');
+        document.getElementById(`dot-${camId}`).className = 'status-dot ready';
+        
+        // Start pose analysis
+        await startAnalysis(camId);
       };
-      return texts[status] || 'Pronto';
+      
+      pc.onicecandidate = async (e) => {
+        if (e.candidate && !e.candidate.candidate.includes('.local')) {
+          const id = `${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+          await DB.set(`cameras/${camId}/regiaCandidates/${id}`, e.candidate.toJSON());
+        }
+      };
+      
+      pc.onconnectionstatechange = () => {
+        console.log(`[${camId}] Connection: ${pc.connectionState}`);
+        if (pc.connectionState === 'failed') {
+          setTimeout(() => connectToCamera(camId), 2000);
+        }
+      };
+      
+      // Create offer
+      pc.addTransceiver('video', { direction: 'recvonly' });
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await DB.set(`cameras/${camId}/regiaOffer`, { type: offer.type, sdp: offer.sdp });
+      
+      console.log(`[${camId}] Offer sent`);
+      
+      // Listen for answer
+      const unsubAnswer = DB.listen(`cameras/${camId}/regiaAnswer`, async (answer) => {
+        if (!answer || !pc || pc.signalingState === 'closed' || pc.signalingState === 'stable') return;
+        
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          console.log(`[${camId}] Answer received`);
+          
+          // Listen for camera candidates
+          const unsubCands = DB.listen(`cameras/${camId}/regiaCameraCandidates`, async (cands) => {
+            if (!cands || !pc || pc.connectionState === 'closed') return;
+            for (const [id, cand] of Object.entries(cands)) {
+              if (cam.addedCandidates.has(id)) continue;
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(cand));
+                cam.addedCandidates.add(id);
+              } catch(e) {}
+            }
+          });
+          cam.unsubscribers.push(unsubCands);
+        } catch(e) {
+          console.warn(`[${camId}] Answer error:`, e);
+        }
+      });
+      cam.unsubscribers.push(unsubAnswer);
     }
     
-    function updateButtonState() {
-      const hasReadyCameras = Array.from(cameras.values()).some(c => c.status === 'ready' || c.status === 'uploaded');
-      const movement = movementSelect.value;
+    async function startAnalysis(camId) {
+      const cam = cameras.get(camId);
+      if (!cam || !cam.stream) return;
       
-      if (isRecording) {
-        mainButton.disabled = false;
-        mainButton.className = 'big-button stop';
-        mainButton.textContent = '⏹';
-        buttonHint.textContent = 'Clicca per fermare la registrazione';
-      } else if (cameras.size === 0) {
-        mainButton.disabled = true;
-        mainButton.className = 'big-button start';
-        mainButton.textContent = '▶️';
-        buttonHint.textContent = 'Connetti almeno una camera per iniziare';
-      } else if (!movement) {
-        mainButton.disabled = true;
-        buttonHint.textContent = 'Seleziona un movimento';
-      } else {
-        mainButton.disabled = false;
-        mainButton.className = 'big-button start';
-        mainButton.textContent = '▶️';
-        buttonHint.textContent = `${cameras.size} camera pronte - Clicca per iniziare`;
+      const video = document.getElementById(`video-${camId}`);
+      const canvas = document.getElementById(`canvas-${camId}`);
+      const scoreEl = document.getElementById(`score-${camId}`);
+      
+      // Wait for video metadata
+      if (video.videoWidth === 0) {
+        await new Promise(r => {
+          video.onloadedmetadata = r;
+          setTimeout(r, 2000);
+        });
+      }
+      
+      // Setup canvas
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      
+      // Initialize pose engine
+      cam.poseEngine = new PoseEngine({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+        onResults: (results) => handlePoseResults(camId, results),
+        onReady: () => console.log(`[${camId}] PoseEngine ready`)
+      });
+      
+      await cam.poseEngine.init();
+      
+      // Setup renderer
+      cam.skeletonRenderer = new SkeletonRenderer(canvas, {
+        jointRadius: 6,
+        lineWidth: 3
+      });
+      
+      // Setup score calculator
+      cam.scoreCalculator = new ScoreCalculator(globalMovement || 'squat');
+      
+      // Start analysis loop
+      const analyze = async () => {
+        if (!cam.poseEngine?.isReady || !video.readyState >= 2) {
+          cam.analysisLoop = requestAnimationFrame(analyze);
+          return;
+        }
+        
+        try {
+          await cam.poseEngine.processFrame(video);
+        } catch(e) {}
+        
+        cam.analysisLoop = requestAnimationFrame(analyze);
+      };
+      
+      analyze();
+      scoreEl.style.display = 'block';
+    }
+    
+    function handlePoseResults(camId, results) {
+      const cam = cameras.get(camId);
+      if (!cam) return;
+      
+      const canvas = document.getElementById(`canvas-${camId}`);
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      if (!results.detected) return;
+      
+      // Draw skeleton
+      cam.skeletonRenderer?.draw(results.landmarks, {
+        angles: results.angles
+      });
+      
+      // Calculate score
+      if (cam.scoreCalculator) {
+        const scoreResult = cam.scoreCalculator.process(results);
+        
+        const scoreEl = document.getElementById(`score-${camId}`);
+        if (scoreEl) {
+          const scoreDiv = scoreEl.querySelector('.score');
+          scoreDiv.textContent = scoreResult.score;
+          const gradeInfo = getGrade(scoreResult.score);
+          scoreDiv.style.color = gradeInfo.color;
+        }
       }
     }
     
-    movementSelect.addEventListener('change', updateButtonState);
-    
-    window.toggleRecording = async () => {
-      if (isRecording) {
-        await stopRecording();
-      } else {
-        await startRecording();
-      }
-    };
-    
-    async function startRecording() {
-      const movement = movementSelect.value;
-      const athleteName = document.getElementById('athleteName').value.trim() || 'Atleta';
-      
-      if (!movement) {
-        alert('Seleziona un movimento');
-        return;
-      }
+    // Recording controls
+    window.startRecording = async () => {
+      if (cameras.size === 0) return;
       
       isRecording = true;
       recordingStartTime = Date.now();
       
-      // Create session
-      await DB.set(`sessions/${sessionId}`, {
-        athleteName,
-        movement,
-        startedAt: recordingStartTime,
-        status: 'recording',
-        cameraCount: cameras.size
-      });
-      
-      // Send START command to all cameras
-      await DB.set(`sessions/current/command`, {
+      // Send command to all cameras
+      await DB.set(`sessions/${sessionId}/command`, {
         action: 'start',
-        movement,
-        sessionId,
+        movement: globalMovement,
         timestamp: Date.now()
       });
       
       // Update UI
-      updateButtonState();
-      timer.classList.add('recording');
-      statusText.textContent = '⏺ REGISTRAZIONE IN CORSO';
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('stopBtn').disabled = false;
+      document.getElementById('timer').classList.add('recording');
       
       timerInterval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
         const min = Math.floor(elapsed / 60).toString().padStart(2, '0');
         const sec = (elapsed % 60).toString().padStart(2, '0');
-        timer.textContent = `${min}:${sec}`;
+        document.getElementById('timer').textContent = `${min}:${sec}`;
       }, 100);
-    }
+      
+      // Reset score calculators
+      cameras.forEach(cam => cam.scoreCalculator?.reset());
+    };
     
-    async function stopRecording() {
+    window.stopRecording = async () => {
+      if (!isRecording) return;
+      
       isRecording = false;
       clearInterval(timerInterval);
       
-      // Send STOP command
-      await DB.set(`sessions/current/command`, {
+      // Send stop command
+      await DB.set(`sessions/${sessionId}/command`, {
         action: 'stop',
-        sessionId,
         timestamp: Date.now()
       });
       
-      // Update session
-      await DB.update(`sessions/${sessionId}`, {
-        status: 'processing',
-        stoppedAt: Date.now(),
-        duration: timer.textContent
-      });
-      
       // Update UI
-      updateButtonState();
-      timer.classList.remove('recording');
-      statusText.textContent = '⏳ Attendendo upload dalle camere...';
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('stopBtn').disabled = true;
+      document.getElementById('timer').classList.remove('recording');
       
-      // Wait for all cameras to upload, then trigger analysis
-      checkUploadsAndAnalyze();
-    }
-    
-    async function checkUploadsAndAnalyze() {
-      // Poll for uploads
-      const checkInterval = setInterval(async () => {
-        const recordings = await DB.get(`recordings/${sessionId}`);
-        
-        if (recordings) {
-          const uploadedCount = Object.values(recordings).filter(r => r.status === 'ready').length;
-          statusText.textContent = `⏳ Upload: ${uploadedCount}/${cameras.size} camere...`;
-          
-          if (uploadedCount >= cameras.size) {
-            clearInterval(checkInterval);
-            await triggerAnalysis();
+      // Collect results
+      setTimeout(async () => {
+        const results = [];
+        cameras.forEach((cam, id) => {
+          const stats = cam.scoreCalculator?.getStats();
+          if (stats) {
+            results.push({
+              camera: cam.info?.name || id,
+              position: cam.info?.position,
+              ...stats
+            });
           }
-        }
-      }, 2000);
-      
-      // Timeout after 2 minutes
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        if (statusText.textContent.includes('Upload')) {
-          triggerAnalysis(); // Analyze what we have
-        }
-      }, 120000);
-    }
-    
-    async function triggerAnalysis() {
-      statusText.textContent = '🤖 Inviando al bot per analisi...';
-      
-      const session = await DB.get(`sessions/${sessionId}`);
-      const recordings = await DB.get(`recordings/${sessionId}`);
-      
-      // Create analysis request
-      const analysisId = 'ana_' + Date.now().toString(36);
-      await DB.set(`analysis/${analysisId}`, {
-        sessionId,
-        session,
-        recordings,
-        status: 'pending',
-        createdAt: Date.now()
-      });
-      
-      // The ANALIZER bot will pick this up and process
-      // For now, create a placeholder report page
-      const reportUrl = `${location.origin}/report.html?id=${analysisId}`;
-      
-      await DB.update(`sessions/${sessionId}`, {
-        status: 'analyzing',
-        analysisId,
-        reportUrl
-      });
-      
-      // Show results
-      showResults(analysisId, reportUrl);
-    }
-    
-    function showResults(analysisId, reportUrl) {
-      statusText.textContent = '✅ Analisi inviata!';
-      
-      document.getElementById('resultsPanel').style.display = 'block';
-      document.getElementById('resultsList').innerHTML = `
-        <div class="result-card">
-          <h4>📊 Report Generato</h4>
-          <p style="margin:10px 0;color:#888">L'analisi è in elaborazione. Il report sarà disponibile a breve.</p>
-          <a href="${reportUrl}" target="_blank" class="link">${reportUrl}</a>
-          <div style="margin-top:15px;display:flex;gap:10px">
-            <button class="btn btn-primary" onclick="window.open('${reportUrl}')">📊 Apri Report</button>
-            <button class="btn btn-secondary" onclick="shareReport('${reportUrl}')">📱 Invia Link</button>
-          </div>
-        </div>
-      `;
-      
-      // Reset for next session
-      sessionId = 'ses_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4);
-      document.getElementById('sessionId').textContent = `ID: ${sessionId}`;
-      
-      const newCameraUrl = `${location.origin}/camera.html?s=${sessionId}`;
-      document.getElementById('cameraLink').value = newCameraUrl;
-    }
-    
-    window.shareReport = (url) => {
-      const text = '📊 Ecco il report della tua analisi movimento:\n\n';
-      window.open(`https://wa.me/?text=${encodeURIComponent(text + url)}`, '_blank');
+        });
+        
+        console.log('Session results:', results);
+        
+        // Could send to bot here or create report
+        alert(`✅ Registrazione completata!\n\nCamere: ${cameras.size}\nDurata: ${document.getElementById('timer').textContent}`);
+      }, 1000);
     };
   </script>
 </body>

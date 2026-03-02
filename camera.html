@@ -435,20 +435,97 @@
         createdAt: Date.now()
       });
       
+      // Listen for WebRTC offer from regia
+      listenForRegia();
+      
       if (sessionId) {
         // Assign to session
         await DB.set(`cameras/${camId}/session`, { sessionId });
         
-        // Listen for commands
+        // Listen for recording commands
         DB.listen(`sessions/${sessionId}/command`, handleCommand);
         DB.listen(`sessions/current/command`, handleCommand);
         
-        setStatus('waiting', 'Connesso - attendo START');
+        setStatus('waiting', 'Connesso - attendo regia');
       } else {
-        // No session - hide waiting overlay for manual use
         waitingOverlay.classList.add('hidden');
         setStatus('ready', 'Pronto - registrazione manuale');
       }
+    }
+    
+    // WebRTC streaming to regia
+    let regiaPC = null;
+    let regiaUnsubscribers = [];
+    let regiaCandidates = new Set();
+    
+    function listenForRegia() {
+      console.log('Listening for regia connection...');
+      
+      DB.listen(`cameras/${camId}/regiaOffer`, async (offer) => {
+        if (!offer) return;
+        
+        console.log('Regia offer received!');
+        
+        // Cleanup old connection
+        if (regiaPC) {
+          regiaPC.close();
+          regiaUnsubscribers.forEach(fn => fn?.());
+          regiaUnsubscribers = [];
+        }
+        regiaCandidates = new Set();
+        
+        // Create peer connection
+        const ICE_SERVERS = [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }
+        ];
+        
+        regiaPC = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        
+        // Add video stream
+        stream.getTracks().forEach(track => {
+          regiaPC.addTrack(track, stream);
+        });
+        
+        // ICE candidates
+        regiaPC.onicecandidate = async (e) => {
+          if (e.candidate && !e.candidate.candidate.includes('.local')) {
+            const id = `${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+            await DB.set(`cameras/${camId}/regiaCameraCandidates/${id}`, e.candidate.toJSON());
+          }
+        };
+        
+        regiaPC.onconnectionstatechange = () => {
+          console.log('Regia connection:', regiaPC.connectionState);
+          if (regiaPC.connectionState === 'connected') {
+            setStatus('ready', 'Streaming alla regia');
+            waitingOverlay.classList.add('hidden');
+          }
+        };
+        
+        // Set offer
+        await regiaPC.setRemoteDescription(new RTCSessionDescription(offer));
+        
+        // Create answer
+        const answer = await regiaPC.createAnswer();
+        await regiaPC.setLocalDescription(answer);
+        await DB.set(`cameras/${camId}/regiaAnswer`, { type: answer.type, sdp: answer.sdp });
+        
+        console.log('Answer sent to regia');
+        
+        // Listen for regia candidates
+        const unsub = DB.listen(`cameras/${camId}/regiaCandidates`, async (cands) => {
+          if (!cands || !regiaPC) return;
+          for (const [id, cand] of Object.entries(cands)) {
+            if (regiaCandidates.has(id)) continue;
+            try {
+              await regiaPC.addIceCandidate(new RTCIceCandidate(cand));
+              regiaCandidates.add(id);
+            } catch(e) {}
+          }
+        });
+        regiaUnsubscribers.push(unsub);
+      });
     }
     
     async function handleCommand(cmd) {
