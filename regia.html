@@ -559,11 +559,13 @@
       isRecording = true;
       recordingStartTime = Date.now();
       
+      console.log('Sending START command to:', `sessions/${sessionId}/command`);
       await DB.set(`sessions/${sessionId}/command`, {
         action: 'start',
         movement: globalMovement,
         timestamp: Date.now()
       });
+      console.log('START command sent');
       
       document.getElementById('startBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;

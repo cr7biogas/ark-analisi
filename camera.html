@@ -412,7 +412,10 @@
       
       // Listen for commands
       if (sessionId) {
+        console.log('Listening for commands on:', `sessions/${sessionId}/command`);
         DB.listen(`sessions/${sessionId}/command`, handleCommand);
+      } else {
+        console.log('No sessionId - commands disabled');
       }
       
       // Heartbeat
