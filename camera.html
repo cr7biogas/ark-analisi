@@ -10,10 +10,25 @@
     body { background: #000; overflow: hidden; height: 100vh; }
     .container { height: 100%; display: flex; flex-direction: column; padding: 0; max-width: 100%; }
     
+    .video-wrapper {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+    }
+    
     video { 
-      flex: 1; 
       width: 100%; 
+      height: 100%;
       object-fit: cover;
+    }
+    
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
     }
     
     .overlay {
@@ -21,13 +36,15 @@
       padding: 15px 20px;
       background: linear-gradient(rgba(0,0,0,0.8), transparent);
       display: flex; justify-content: space-between; align-items: center;
+      z-index: 10;
     }
     
     .status { display: flex; align-items: center; gap: 8px; font-size: 14px; }
     .status-dot { width: 12px; height: 12px; border-radius: 50%; }
     .status-dot.ready { background: #2ecc71; }
     .status-dot.recording { background: #e94560; animation: pulse 1s infinite; }
-    .status-dot.waiting { background: #f1c40f; }
+    .status-dot.waiting { background: #f1c40f; animation: pulse 1s infinite; }
+    .status-dot.loading { background: #3498db; animation: pulse 0.5s infinite; }
     
     @keyframes pulse { 50% { opacity: 0.5; } }
     
@@ -42,7 +59,7 @@
     
     .rec-indicator {
       position: absolute;
-      top: 80px;
+      top: 70px;
       left: 50%;
       transform: translateX(-50%);
       background: #e94560;
@@ -52,27 +69,45 @@
       font-size: 18px;
       display: none;
       animation: pulse 1s infinite;
+      z-index: 10;
     }
     
     .rec-indicator.active { display: flex; align-items: center; gap: 10px; }
     
+    /* Score overlay during recording */
+    .score-overlay {
+      position: absolute;
+      bottom: 150px;
+      right: 20px;
+      background: rgba(0,0,0,0.8);
+      padding: 15px 20px;
+      border-radius: 15px;
+      text-align: center;
+      z-index: 10;
+      display: none;
+    }
+    
+    .score-overlay.active { display: block; }
+    .score-overlay .score { font-size: 48px; font-weight: 800; color: var(--accent); }
+    .score-overlay .label { font-size: 11px; color: #888; }
+    
     .bottom-panel {
       position: absolute; bottom: 0; left: 0; right: 0;
       background: linear-gradient(transparent, rgba(0,0,0,0.95));
-      padding: 30px 20px 30px;
+      padding: 20px;
+      z-index: 10;
     }
     
-    .info { text-align: center; margin-bottom: 20px; }
+    .info { text-align: center; margin-bottom: 15px; }
     .info .label { font-size: 11px; color: var(--text-secondary); margin-bottom: 5px; }
-    .info .value { font-size: 24px; font-weight: 700; color: var(--accent); }
-    .info .sub { font-size: 13px; color: #888; margin-top: 8px; }
+    .info .value { font-size: 20px; font-weight: 700; color: var(--accent); }
     
     .timer {
       font-size: 48px;
       font-weight: 800;
       font-family: monospace;
       text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
       color: #fff;
     }
     
@@ -104,6 +139,7 @@
       text-align: center;
     }
     .setup .btn { width: 100%; max-width: 280px; padding: 15px; font-size: 16px; }
+    .setup .loading-text { margin-top: 20px; color: #888; }
     
     /* Waiting for command overlay */
     .waiting-overlay {
@@ -119,7 +155,7 @@
     .waiting-overlay.hidden { display: none; }
     .waiting-overlay .icon { font-size: 60px; margin-bottom: 20px; }
     .waiting-overlay h2 { font-size: 24px; margin-bottom: 10px; }
-    .waiting-overlay p { color: #888; }
+    .waiting-overlay p { color: #888; text-align: center; padding: 0 20px; }
   </style>
 </head>
 <body>
@@ -127,7 +163,7 @@
   <div class="setup" id="setup">
     <div class="logo">📱</div>
     <h1>ARK Camera</h1>
-    <p>Registrazione video per analisi movimento</p>
+    <p>Registrazione video con analisi posturale</p>
     
     <div class="form-group">
       <input type="text" id="athleteName" placeholder="👤 Nome Atleta" required>
@@ -143,38 +179,49 @@
     </div>
     
     <div class="form-group">
-      <select id="quality">
-        <option value="1080">📹 1080p (Full HD)</option>
-        <option value="720" selected>📹 720p (HD)</option>
-        <option value="480">📹 480p (SD)</option>
+      <select id="movement">
+        <option value="squat">🏋️ Squat</option>
+        <option value="deadlift">💪 Deadlift</option>
+        <option value="press">🔥 Press</option>
+        <option value="pullup">🔥 Pull-up</option>
+        <option value="plank">🧘 Plank</option>
       </select>
     </div>
     
-    <button class="btn btn-primary" onclick="startSetup()">🎬 Prepara Camera</button>
+    <button class="btn btn-primary" onclick="startSetup()">🎬 Avvia Camera</button>
+    <p class="loading-text" id="loadingText" style="display:none">Caricamento AI...</p>
   </div>
   
   <!-- Camera View -->
   <div class="container">
-    <video id="video" autoplay playsinline muted></video>
-    
-    <div class="overlay">
-      <div class="status">
-        <span class="status-dot" id="statusDot"></span>
-        <span id="statusText">Pronto</span>
+    <div class="video-wrapper">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+      
+      <div class="overlay">
+        <div class="status">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Pronto</span>
+        </div>
+        <div class="cam-label" id="nameLabel">Camera</div>
       </div>
-      <div class="cam-label" id="nameLabel">Camera</div>
-      <a href="index.html" style="background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:20px;text-decoration:none;color:white;font-size:12px;">🏠</a>
-    </div>
-    
-    <div class="rec-indicator" id="recIndicator">
-      <span>⏺</span> REC
-    </div>
-    
-    <!-- Waiting for START command -->
-    <div class="waiting-overlay" id="waitingOverlay">
-      <div class="icon">⏳</div>
-      <h2>In attesa</h2>
-      <p id="waitingText">Attendo comando START dalla regia...</p>
+      
+      <div class="rec-indicator" id="recIndicator">
+        <span>⏺</span> REC
+      </div>
+      
+      <div class="score-overlay" id="scoreOverlay">
+        <div class="score" id="liveScore">--</div>
+        <div class="label">SCORE</div>
+      </div>
+      
+      <!-- Waiting for START command -->
+      <div class="waiting-overlay" id="waitingOverlay">
+        <div class="icon">✅</div>
+        <h2>Camera Pronta</h2>
+        <p id="waitingText">Attendo comando START dalla regia...<br><br>Oppure premi il pulsante per registrare manualmente</p>
+        <button class="btn btn-primary mt-2" onclick="manualStart()">▶️ Registra Ora</button>
+      </div>
     </div>
     
     <div class="bottom-panel">
@@ -183,11 +230,11 @@
       <div class="info">
         <div class="label">CAMERA ID</div>
         <div class="value" id="camId">---</div>
-        <div class="sub" id="sessionInfo">Sessione: --</div>
       </div>
       
       <div class="controls">
         <button class="btn btn-secondary" onclick="switchCamera()">🔄 Flip</button>
+        <button class="btn btn-secondary" id="recBtn" onclick="toggleRecording()" style="display:none">⏺ REC</button>
         <button class="btn btn-danger" onclick="stopCamera()">⏹️ Esci</button>
       </div>
     </div>
@@ -195,13 +242,15 @@
 
   <script type="module">
     import { DB } from './firebase-config.js';
+    import { PoseEngine, SkeletonRenderer, LANDMARKS } from './lib/pose-engine.js';
+    import { ScoreCalculator, getGrade } from './lib/scoring.js';
     
     // State
     let camId = null;
     let sessionId = null;
     let athleteName = '';
     let position = '';
-    let quality = '720';
+    let movement = 'squat';
     let stream = null;
     let mediaRecorder = null;
     let recordedChunks = [];
@@ -210,13 +259,22 @@
     let recordingStartTime = null;
     let timerInterval = null;
     
+    // Pose analysis
+    let poseEngine = null;
+    let skeletonRenderer = null;
+    let scoreCalculator = null;
+    let analysisLoop = null;
+    
     // Elements
     const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
     const timer = document.getElementById('timer');
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
     const recIndicator = document.getElementById('recIndicator');
     const waitingOverlay = document.getElementById('waitingOverlay');
+    const scoreOverlay = document.getElementById('scoreOverlay');
+    const liveScore = document.getElementById('liveScore');
     
     function setStatus(status, text) {
       statusDot.className = 'status-dot ' + status;
@@ -234,98 +292,197 @@
     window.startSetup = async () => {
       athleteName = document.getElementById('athleteName').value.trim() || 'Atleta';
       position = document.getElementById('position').value;
-      quality = document.getElementById('quality').value;
+      movement = document.getElementById('movement').value;
       
-      const res = {
-        '1080': { w: 1920, h: 1080 },
-        '720': { w: 1280, h: 720 },
-        '480': { w: 854, h: 480 }
-      }[quality];
+      const loadingText = document.getElementById('loadingText');
+      loadingText.style.display = 'block';
+      loadingText.textContent = 'Avvio camera...';
       
       try {
+        // Start camera
         stream = await navigator.mediaDevices.getUserMedia({
           video: { 
             facingMode, 
-            width: { ideal: res.w }, 
-            height: { ideal: res.h }, 
+            width: { ideal: 1280 }, 
+            height: { ideal: 720 }, 
             frameRate: { ideal: 30 } 
           },
-          audio: true // Include audio for analysis
+          audio: true
         });
         
         video.srcObject = stream;
-        document.getElementById('setup').classList.add('hidden');
-        document.getElementById('nameLabel').textContent = `${athleteName} - ${position}`;
+        await video.play();
         
-        // Wake lock
-        if ('wakeLock' in navigator) {
-          try { await navigator.wakeLock.request('screen'); } catch(e) {}
-        }
+        // Setup canvas
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
         
-        // Generate camera ID
-        camId = 'cam_' + Math.random().toString(36).substr(2, 8);
-        document.getElementById('camId').textContent = camId;
+        loadingText.textContent = 'Caricamento AI per analisi posturale...';
         
-        // Register in Firebase and wait for session
-        await registerCamera();
+        // Initialize pose engine
+        poseEngine = new PoseEngine({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+          onResults: handlePoseResults,
+          onReady: () => {
+            console.log('PoseEngine ready');
+            loadingText.textContent = 'Pronto!';
+            finishSetup();
+          }
+        });
+        
+        await poseEngine.init();
         
       } catch (e) {
-        alert('Errore camera: ' + e.message);
+        alert('Errore: ' + e.message);
+        loadingText.textContent = 'Errore: ' + e.message;
       }
     };
     
+    function finishSetup() {
+      document.getElementById('setup').classList.add('hidden');
+      document.getElementById('nameLabel').textContent = `${athleteName} - ${position}`;
+      document.getElementById('recBtn').style.display = 'block';
+      
+      // Wake lock
+      if ('wakeLock' in navigator) {
+        navigator.wakeLock.request('screen').catch(() => {});
+      }
+      
+      // Generate camera ID
+      camId = 'cam_' + Math.random().toString(36).substr(2, 8);
+      document.getElementById('camId').textContent = camId;
+      
+      // Setup skeleton renderer
+      skeletonRenderer = new SkeletonRenderer(canvas, {
+        jointRadius: 8,
+        lineWidth: 4
+      });
+      
+      // Setup score calculator
+      scoreCalculator = new ScoreCalculator(movement);
+      
+      // Start analysis loop
+      startAnalysisLoop();
+      
+      // Register camera
+      registerCamera();
+      
+      setStatus('ready', 'Pronto');
+    }
+    
+    function startAnalysisLoop() {
+      const analyze = async () => {
+        if (!poseEngine?.isReady || !video.readyState >= 2) {
+          analysisLoop = requestAnimationFrame(analyze);
+          return;
+        }
+        
+        try {
+          await poseEngine.processFrame(video);
+        } catch (e) {
+          console.warn('Frame error:', e);
+        }
+        
+        analysisLoop = requestAnimationFrame(analyze);
+      };
+      
+      analyze();
+    }
+    
+    function handlePoseResults(results) {
+      // Clear and draw skeleton
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      if (!results.detected) return;
+      
+      // Draw skeleton
+      skeletonRenderer.draw(results.landmarks, {
+        angles: results.angles,
+        centerOfMass: results.centerOfMass
+      });
+      
+      // Calculate score
+      if (scoreCalculator) {
+        const scoreResult = scoreCalculator.process(results);
+        
+        // Update live score display
+        liveScore.textContent = scoreResult.score;
+        const gradeInfo = getGrade(scoreResult.score);
+        liveScore.style.color = gradeInfo.color;
+        
+        // Show score overlay when recording
+        if (isRecording) {
+          scoreOverlay.classList.add('active');
+        }
+      }
+    }
+    
     async function registerCamera() {
-      // Register camera as available
+      // Get session from URL if present
+      const params = new URLSearchParams(location.search);
+      sessionId = params.get('s');
+      
+      // Register camera
       await DB.set(`cameras/${camId}`, {
         name: athleteName,
         position,
-        quality,
+        movement,
         status: 'ready',
         createdAt: Date.now()
       });
       
-      setStatus('waiting', 'In attesa di sessione...');
-      waitingOverlay.classList.remove('hidden');
-      
-      // Listen for session assignment
-      DB.listen(`cameras/${camId}/session`, (data) => {
-        if (data && data.sessionId) {
-          sessionId = data.sessionId;
-          document.getElementById('sessionInfo').textContent = `Sessione: ${sessionId}`;
-          document.getElementById('waitingText').textContent = 'Connesso! Attendo START...';
-          
-          // Listen for recording commands
-          listenForCommands();
-        }
-      });
-      
-      // Also listen for global commands (broadcast to all cameras)
-      DB.listen(`sessions/current/command`, handleCommand);
-    }
-    
-    function listenForCommands() {
-      if (!sessionId) return;
-      
-      DB.listen(`sessions/${sessionId}/command`, handleCommand);
+      if (sessionId) {
+        // Assign to session
+        await DB.set(`cameras/${camId}/session`, { sessionId });
+        
+        // Listen for commands
+        DB.listen(`sessions/${sessionId}/command`, handleCommand);
+        DB.listen(`sessions/current/command`, handleCommand);
+        
+        setStatus('waiting', 'Connesso - attendo START');
+      } else {
+        // No session - hide waiting overlay for manual use
+        waitingOverlay.classList.add('hidden');
+        setStatus('ready', 'Pronto - registrazione manuale');
+      }
     }
     
     async function handleCommand(cmd) {
       if (!cmd) return;
       
-      console.log('Command received:', cmd);
+      console.log('Command:', cmd);
       
       if (cmd.action === 'start' && !isRecording) {
-        await startRecording(cmd.movement);
+        waitingOverlay.classList.add('hidden');
+        await startRecording();
       } else if (cmd.action === 'stop' && isRecording) {
         await stopRecording();
       }
     }
     
-    async function startRecording(movement) {
+    window.manualStart = () => {
+      waitingOverlay.classList.add('hidden');
+      startRecording();
+    };
+    
+    window.toggleRecording = () => {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    };
+    
+    async function startRecording() {
       if (isRecording) return;
       
       isRecording = true;
       recordedChunks = [];
+      scoreCalculator?.reset();
       
       // Setup MediaRecorder
       const options = { mimeType: 'video/webm;codecs=vp9,opus' };
@@ -345,18 +502,21 @@
         await uploadRecording();
       };
       
-      mediaRecorder.start(1000); // Collect data every second
+      mediaRecorder.start(1000);
       
       // Update UI
-      waitingOverlay.classList.add('hidden');
       recIndicator.classList.add('active');
+      scoreOverlay.classList.add('active');
       timer.classList.add('recording');
+      document.getElementById('recBtn').textContent = '⏹ STOP';
+      document.getElementById('recBtn').classList.add('btn-danger');
+      document.getElementById('recBtn').classList.remove('btn-secondary');
       setStatus('recording', 'Registrazione...');
       
       recordingStartTime = Date.now();
       timerInterval = setInterval(updateTimer, 100);
       
-      // Update Firebase status
+      // Update Firebase
       await DB.update(`cameras/${camId}`, { status: 'recording', startedAt: recordingStartTime });
     }
     
@@ -366,77 +526,67 @@
       isRecording = false;
       clearInterval(timerInterval);
       
-      // Stop recorder (triggers onstop -> uploadRecording)
       mediaRecorder.stop();
       
       // Update UI
       recIndicator.classList.remove('active');
+      scoreOverlay.classList.remove('active');
       timer.classList.remove('recording');
-      setStatus('waiting', 'Caricamento...');
-      waitingOverlay.classList.remove('hidden');
-      document.getElementById('waitingText').textContent = 'Caricamento video...';
+      document.getElementById('recBtn').textContent = '⏺ REC';
+      document.getElementById('recBtn').classList.remove('btn-danger');
+      document.getElementById('recBtn').classList.add('btn-secondary');
+      setStatus('loading', 'Caricamento...');
       
-      // Update Firebase status
       await DB.update(`cameras/${camId}`, { status: 'uploading' });
     }
     
     async function uploadRecording() {
       const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const stats = scoreCalculator?.getStats() || {};
       
-      // Convert to base64 for Firebase (or use R2 for larger files)
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result;
-        
-        // Save video reference
-        const videoId = `vid_${Date.now()}`;
-        await DB.set(`recordings/${sessionId}/${camId}`, {
-          videoId,
-          athleteName,
-          position,
-          duration: timer.textContent,
-          size: blob.size,
-          timestamp: Date.now(),
-          // For small videos, store base64. For large, upload to R2
-          data: blob.size < 5 * 1024 * 1024 ? base64 : null, // Max 5MB inline
-          status: 'ready'
-        });
-        
-        // If larger than 5MB, upload to R2
-        if (blob.size >= 5 * 1024 * 1024) {
-          await uploadToR2(blob, videoId);
-        }
-        
-        // Update camera status
-        await DB.update(`cameras/${camId}`, { status: 'uploaded', videoId });
-        
-        // Done - wait for next command
-        setStatus('ready', 'Pronto');
-        document.getElementById('waitingText').textContent = 'Video caricato! Attendo prossimo comando...';
+      // For demo, just save metadata (video upload to R2 would go here)
+      const videoId = `vid_${Date.now()}`;
+      
+      const recordingData = {
+        videoId,
+        athleteName,
+        position,
+        movement,
+        duration: timer.textContent,
+        size: blob.size,
+        timestamp: Date.now(),
+        stats: {
+          averageScore: stats.averageScore || 0,
+          bestScore: stats.bestScore || 0,
+          totalReps: stats.totalReps || 0,
+          topFaults: stats.topFaults || []
+        },
+        status: 'ready'
       };
       
-      reader.readAsDataURL(blob);
-    }
-    
-    async function uploadToR2(blob, videoId) {
-      try {
-        const formData = new FormData();
-        formData.append('file', blob, `${videoId}.webm`);
-        formData.append('folder', `ark-analisi/${sessionId}`);
-        
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (response.ok) {
-          const { url } = await response.json();
-          await DB.update(`recordings/${sessionId}/${camId}`, { videoUrl: url, data: null });
-        }
-      } catch (e) {
-        console.error('R2 upload failed:', e);
-        // Keep base64 as fallback
+      // Save to Firebase
+      if (sessionId) {
+        await DB.set(`recordings/${sessionId}/${camId}`, recordingData);
+      } else {
+        await DB.set(`recordings/manual/${videoId}`, recordingData);
       }
+      
+      // Update camera status
+      await DB.update(`cameras/${camId}`, { 
+        status: 'uploaded', 
+        videoId,
+        stats: recordingData.stats
+      });
+      
+      // Show completion
+      setStatus('ready', 'Caricato!');
+      
+      // Show summary alert
+      alert(`✅ Video salvato!\n\nScore medio: ${stats.averageScore || '--'}\nRipetizioni: ${stats.totalReps || 0}\nDurata: ${timer.textContent}`);
+      
+      // Reset for next recording
+      timer.textContent = '00:00';
+      recordingStartTime = null;
     }
     
     window.switchCamera = async () => {
@@ -447,20 +597,18 @@
       
       facingMode = facingMode === 'environment' ? 'user' : 'environment';
       
-      const res = {
-        '1080': { w: 1920, h: 1080 },
-        '720': { w: 1280, h: 720 },
-        '480': { w: 854, h: 480 }
-      }[quality];
-      
       stream.getTracks().forEach(t => t.stop());
       
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode, width: { ideal: res.w }, height: { ideal: res.h } },
+        video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: true
       });
       
       video.srcObject = stream;
+      await video.play();
+      
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
     };
     
     window.stopCamera = async () => {
@@ -469,6 +617,7 @@
         await stopRecording();
       }
       
+      cancelAnimationFrame(analysisLoop);
       stream?.getTracks().forEach(t => t.stop());
       if (camId) await DB.remove(`cameras/${camId}`);
       location.href = 'index.html';
