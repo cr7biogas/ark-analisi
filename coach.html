@@ -264,7 +264,18 @@
     
     const ICE_SERVERS = [
       { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
+      { urls: 'stun:stun1.l.google.com:19302' },
+      // Free TURN server for testing (OpenRelay)
+      {
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      }
     ];
     
     // State
@@ -476,6 +487,30 @@
       
       pc.onconnectionstatechange = () => {
         console.log(`[${camId}] Connection: ${pc.connectionState}`);
+        
+        // Update status dot
+        const slot = cam.element;
+        const dot = slot?.querySelector('.status-dot');
+        if (dot) {
+          dot.className = 'status-dot';
+          if (pc.connectionState === 'connected') {
+            dot.classList.add('online');
+          } else if (pc.connectionState === 'connecting' || pc.connectionState === 'new') {
+            dot.classList.add('connecting');
+          } else {
+            dot.classList.add('offline');
+          }
+        }
+      };
+      
+      pc.oniceconnectionstatechange = () => {
+        console.log(`[${camId}] ICE: ${pc.iceConnectionState}`);
+        
+        // Auto-retry on failure
+        if (pc.iceConnectionState === 'failed') {
+          console.log(`[${camId}] Retrying connection...`);
+          setTimeout(() => connectToCamera(camId), 2000);
+        }
       };
       
       // Create offer
