@@ -418,16 +418,21 @@
         console.log('No sessionId - commands disabled');
       }
       
-      // Listen for global refresh signal from regia
-      let initialRefresh = null;
-      DB.listen('globalRefresh', (data) => {
+      // Listen for regia reload signal - auto reconnect
+      let lastRegiaTs = null;
+      DB.listen('regiaActive', (data) => {
         if (!data) return;
-        if (initialRefresh === null) {
-          initialRefresh = data.timestamp;
-          return; // Skip first read
+        
+        if (lastRegiaTs === null) {
+          lastRegiaTs = data.ts;
+          console.log('Initial regia timestamp:', lastRegiaTs);
+          return; // First read, just store
         }
-        if (data.timestamp > initialRefresh) {
-          console.log('Refresh signal received - reloading camera');
+        
+        // If timestamp changed, regia was reloaded - reconnect
+        if (data.ts !== lastRegiaTs) {
+          console.log('Regia reloaded - reconnecting camera...');
+          lastRegiaTs = data.ts;
           location.reload();
         }
       });

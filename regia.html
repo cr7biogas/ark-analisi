@@ -318,6 +318,11 @@
     const cameraUrl = `${location.origin}/camera.html?s=${sessionId}`;
     document.getElementById('cameraLink').value = cameraUrl;
     
+    // Signal cameras to reconnect when regia loads
+    const regiaLoadTime = Date.now();
+    DB.set('regiaActive', { ts: regiaLoadTime, sessionId });
+    console.log('Regia active signal sent:', regiaLoadTime);
+    
     window.copyLink = () => {
       navigator.clipboard.writeText(cameraUrl);
       alert('✅ Link copiato!');
