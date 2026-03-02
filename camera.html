@@ -175,7 +175,18 @@
     ];
     
     const params = new URLSearchParams(location.search);
-    const sessionId = params.get('s');
+    
+    // Session ID: prefer URL param, fallback to localStorage
+    let sessionId = params.get('s');
+    if (sessionId) {
+      // Save sessionId for auto-reconnect
+      localStorage.setItem('arkCamera_sessionId', sessionId);
+    } else {
+      // Try to restore from localStorage
+      sessionId = localStorage.getItem('arkCamera_sessionId');
+    }
+    
+    console.log('Session ID:', sessionId || 'none');
     
     // Check for saved position - auto-start if exists
     const savedPosition = localStorage.getItem('arkCamera_position');
@@ -422,10 +433,13 @@
       
       // Listen for commands
       if (sessionId) {
-        console.log('Listening for commands on:', `sessions/${sessionId}/command`);
+        console.log('✅ Listening for commands on:', `sessions/${sessionId}/command`);
         DB.listen(`sessions/${sessionId}/command`, handleCommand);
+        document.getElementById('connInfo').textContent = `Session: ${sessionId.slice(0, 12)}...`;
       } else {
-        console.log('No sessionId - commands disabled');
+        console.warn('⚠️ No sessionId - regia commands disabled! Open from regia link.');
+        document.getElementById('connInfo').textContent = '⚠️ Nessuna sessione - riapri dal link regia';
+        document.getElementById('connInfo').style.color = '#e94560';
       }
       
       // Listen for regia reload signal - auto reconnect
@@ -521,11 +535,21 @@
     
     async function handleCommand(cmd) {
       if (!cmd) return;
-      console.log('Command:', cmd);
+      console.log('📥 Command received:', cmd);
+      
+      // Update movement if specified
+      if (cmd.movement) {
+        movement = cmd.movement;
+        if (scoreCalculator) {
+          scoreCalculator = new ScoreCalculator(movement);
+        }
+      }
       
       if (cmd.action === 'start' && !isRecording) {
+        console.log('▶️ Starting recording from regia command');
         await startRecording();
       } else if (cmd.action === 'stop' && isRecording) {
+        console.log('⏹ Stopping recording from regia command');
         await stopRecording();
       }
     }
