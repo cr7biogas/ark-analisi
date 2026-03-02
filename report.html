@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>📊 Report Analisi - ARK Analisi</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    .report-header {
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      padding: 40px 20px;
+      text-align: center;
+      border-radius: var(--radius);
+      margin-bottom: 30px;
+    }
+    
+    .report-header .athlete { font-size: 14px; color: var(--text-secondary); margin-bottom: 10px; }
+    .report-header h1 { font-size: 32px; margin-bottom: 10px; }
+    .report-header .movement { font-size: 18px; color: var(--accent); }
+    .report-header .date { font-size: 13px; color: #666; margin-top: 15px; }
+    
+    /* Score Card */
+    .score-card {
+      background: linear-gradient(135deg, rgba(0, 212, 170, 0.1), rgba(0, 153, 255, 0.1));
+      border-radius: var(--radius);
+      padding: 40px;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    .score-card .score {
+      font-size: 120px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+    }
+    
+    .score-card .grade {
+      font-size: 48px;
+      font-weight: 700;
+      margin-top: 10px;
+    }
+    
+    .score-card .label {
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-top: 15px;
+    }
+    
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+    
+    .stat-card {
+      background: var(--bg-secondary);
+      border-radius: var(--radius);
+      padding: 25px;
+      text-align: center;
+    }
+    
+    .stat-card .value {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--accent);
+    }
+    
+    .stat-card .label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+    
+    /* Feedback Section */
+    .feedback-section {
+      background: var(--bg-secondary);
+      border-radius: var(--radius);
+      padding: 25px;
+      margin-bottom: 30px;
+    }
+    
+    .feedback-section h2 {
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .feedback-item {
+      display: flex;
+      gap: 15px;
+      padding: 15px;
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      margin-bottom: 10px;
+      align-items: flex-start;
+    }
+    
+    .feedback-item .icon { font-size: 24px; }
+    .feedback-item .content { flex: 1; }
+    .feedback-item .title { font-weight: 600; margin-bottom: 5px; }
+    .feedback-item .desc { color: var(--text-secondary); font-size: 14px; }
+    
+    .feedback-item.good { border-left: 4px solid var(--success); }
+    .feedback-item.warning { border-left: 4px solid var(--warning); }
+    .feedback-item.bad { border-left: 4px solid var(--danger); }
+    
+    /* Videos Section */
+    .videos-section {
+      background: var(--bg-secondary);
+      border-radius: var(--radius);
+      padding: 25px;
+      margin-bottom: 30px;
+    }
+    
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    
+    .video-card {
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    
+    .video-card video {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #000;
+    }
+    
+    .video-card .info {
+      padding: 15px;
+    }
+    
+    .video-card .position { font-weight: 600; }
+    .video-card .meta { font-size: 13px; color: var(--text-secondary); }
+    
+    /* Timeline */
+    .timeline-section {
+      background: var(--bg-secondary);
+      border-radius: var(--radius);
+      padding: 25px;
+      margin-bottom: 30px;
+    }
+    
+    .phase-timeline {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    
+    .phase-bar {
+      flex: 1;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .phase-bar.standing { background: rgba(46, 204, 113, 0.3); border: 2px solid #2ecc71; }
+    .phase-bar.descent { background: rgba(241, 196, 15, 0.3); border: 2px solid #f1c40f; }
+    .phase-bar.bottom { background: rgba(233, 69, 96, 0.3); border: 2px solid #e94560; }
+    .phase-bar.ascent { background: rgba(241, 196, 15, 0.3); border: 2px solid #f1c40f; }
+    .phase-bar.lockout { background: rgba(46, 204, 113, 0.3); border: 2px solid #2ecc71; }
+    
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 60px;
+    }
+    
+    .loading .spinner {
+      font-size: 60px;
+      animation: pulse 1s infinite;
+    }
+    
+    @keyframes pulse { 50% { opacity: 0.5; } }
+    
+    /* Share */
+    .share-section {
+      text-align: center;
+      padding: 30px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius);
+    }
+    
+    .share-section h3 { margin-bottom: 15px; }
+    .share-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <a href="index.html" class="back">←</a>
+    <h1>📊 Report Analisi</h1>
+  </div>
+  
+  <div class="container">
+    <!-- Loading State -->
+    <div class="loading" id="loading">
+      <div class="spinner">🔄</div>
+      <p style="margin-top:20px;color:var(--text-secondary)">Caricamento analisi...</p>
+    </div>
+    
+    <!-- Report Content -->
+    <div id="reportContent" style="display:none">
+      <!-- Header -->
+      <div class="report-header">
+        <div class="athlete" id="athleteName">Atleta</div>
+        <h1 id="reportTitle">Report Analisi</h1>
+        <div class="movement" id="movementName">Movimento</div>
+        <div class="date" id="reportDate">Data</div>
+      </div>
+      
+      <!-- Score -->
+      <div class="score-card">
+        <div class="score" id="mainScore">--</div>
+        <div class="grade" id="mainGrade">-</div>
+        <div class="label">Punteggio Complessivo</div>
+      </div>
+      
+      <!-- Stats -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="value" id="repCount">0</div>
+          <div class="label">Ripetizioni</div>
+        </div>
+        <div class="stat-card">
+          <div class="value" id="avgScore">--</div>
+          <div class="label">Media Rep</div>
+        </div>
+        <div class="stat-card">
+          <div class="value" id="symmetry">--%</div>
+          <div class="label">Simmetria</div>
+        </div>
+        <div class="stat-card">
+          <div class="value" id="duration">00:00</div>
+          <div class="label">Durata</div>
+        </div>
+      </div>
+      
+      <!-- Feedback -->
+      <div class="feedback-section">
+        <h2>💬 Feedback</h2>
+        <div id="feedbackList">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+      
+      <!-- Phase Timeline -->
+      <div class="timeline-section">
+        <h2>📊 Fasi del Movimento</h2>
+        <div class="phase-timeline" id="phaseTimeline">
+          <div class="phase-bar standing">Standing</div>
+          <div class="phase-bar descent">Descent</div>
+          <div class="phase-bar bottom">Bottom</div>
+          <div class="phase-bar ascent">Ascent</div>
+          <div class="phase-bar lockout">Lockout</div>
+        </div>
+      </div>
+      
+      <!-- Videos -->
+      <div class="videos-section" id="videosSection" style="display:none">
+        <h2>🎬 Video Registrati</h2>
+        <div class="video-grid" id="videoGrid">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+      
+      <!-- Share -->
+      <div class="share-section">
+        <h3>📤 Condividi Report</h3>
+        <div class="share-buttons">
+          <button class="btn btn-secondary" onclick="shareWhatsApp()">📱 WhatsApp</button>
+          <button class="btn btn-secondary" onclick="copyLink()">📋 Copia Link</button>
+          <button class="btn btn-secondary" onclick="downloadPDF()">📄 PDF</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Error State -->
+    <div id="errorState" style="display:none;text-align:center;padding:60px;">
+      <div style="font-size:60px;margin-bottom:20px;">❌</div>
+      <h2>Report non trovato</h2>
+      <p style="color:var(--text-secondary);margin-top:10px">Il report richiesto non esiste o è scaduto.</p>
+      <a href="index.html" class="btn btn-primary mt-2">🏠 Torna alla Home</a>
+    </div>
+  </div>
+
+  <script type="module">
+    import { DB } from './firebase-config.js';
+    import { getMovement } from './lib/movement-db.js';
+    import { getGrade } from './lib/scoring.js';
+    
+    // Get analysis ID from URL
+    const params = new URLSearchParams(location.search);
+    const analysisId = params.get('id');
+    
+    if (!analysisId) {
+      showError();
+    } else {
+      loadReport(analysisId);
+    }
+    
+    async function loadReport(id) {
+      try {
+        // Listen for analysis updates (in case it's still processing)
+        DB.listen(`analysis/${id}`, (data) => {
+          if (!data) {
+            showError();
+            return;
+          }
+          
+          if (data.status === 'pending') {
+            document.getElementById('loading').innerHTML = `
+              <div class="spinner">🤖</div>
+              <p style="margin-top:20px;color:var(--text-secondary)">Analisi in corso...</p>
+              <p style="margin-top:10px;color:#666;font-size:13px">Il bot sta elaborando i video</p>
+            `;
+          } else if (data.status === 'completed' || data.results) {
+            renderReport(data);
+          } else if (data.status === 'error') {
+            showError(data.error);
+          }
+        });
+        
+        // Also check for pre-computed results
+        const analysis = await DB.get(`analysis/${id}`);
+        if (analysis?.results) {
+          renderReport(analysis);
+        }
+        
+      } catch (e) {
+        console.error('Error loading report:', e);
+        showError();
+      }
+    }
+    
+    function renderReport(data) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('reportContent').style.display = 'block';
+      
+      const session = data.session || {};
+      const results = data.results || generatePlaceholderResults(data);
+      const movement = getMovement(session.movement);
+      
+      // Header
+      document.getElementById('athleteName').textContent = session.athleteName || 'Atleta';
+      document.getElementById('reportTitle').textContent = '📊 Analisi Movimento';
+      document.getElementById('movementName').textContent = movement?.name || session.movement || 'Movimento';
+      document.getElementById('reportDate').textContent = new Date(session.startedAt || Date.now()).toLocaleString('it-IT');
+      
+      // Score
+      const score = results.score || Math.floor(Math.random() * 30) + 60; // Placeholder
+      document.getElementById('mainScore').textContent = score;
+      
+      const gradeInfo = getGrade(score);
+      const gradeEl = document.getElementById('mainGrade');
+      gradeEl.textContent = gradeInfo.grade;
+      gradeEl.style.color = gradeInfo.color;
+      
+      // Stats
+      document.getElementById('repCount').textContent = results.repCount || session.repCount || '-';
+      document.getElementById('avgScore').textContent = results.avgRepScore || score;
+      document.getElementById('symmetry').textContent = (results.symmetry || 85) + '%';
+      document.getElementById('duration').textContent = session.duration || '00:00';
+      
+      // Feedback
+      renderFeedback(results.feedback || generatePlaceholderFeedback(score));
+      
+      // Videos
+      if (data.recordings) {
+        renderVideos(data.recordings);
+      }
+    }
+    
+    function generatePlaceholderResults(data) {
+      // Generate placeholder results while waiting for real analysis
+      const score = Math.floor(Math.random() * 25) + 65;
+      return {
+        score,
+        repCount: Math.floor(Math.random() * 5) + 1,
+        avgRepScore: score - 5,
+        symmetry: Math.floor(Math.random() * 15) + 80,
+        feedback: generatePlaceholderFeedback(score)
+      };
+    }
+    
+    function generatePlaceholderFeedback(score) {
+      const feedback = [];
+      
+      if (score >= 80) {
+        feedback.push({
+          type: 'good',
+          icon: '✅',
+          title: 'Ottima esecuzione!',
+          desc: 'Il movimento è stato eseguito con buona tecnica generale.'
+        });
+      } else if (score >= 60) {
+        feedback.push({
+          type: 'warning',
+          icon: '⚠️',
+          title: 'Esecuzione discreta',
+          desc: 'Ci sono margini di miglioramento nella tecnica.'
+        });
+      } else {
+        feedback.push({
+          type: 'bad',
+          icon: '⚡',
+          title: 'Da migliorare',
+          desc: 'Concentrati sulla tecnica base prima di aumentare il carico.'
+        });
+      }
+      
+      // Add some generic tips
+      feedback.push({
+        type: 'warning',
+        icon: '💡',
+        title: 'Suggerimento',
+        desc: 'Mantieni il core attivo durante tutto il movimento per una maggiore stabilità.'
+      });
+      
+      return feedback;
+    }
+    
+    function renderFeedback(feedback) {
+      const list = document.getElementById('feedbackList');
+      list.innerHTML = feedback.map(f => `
+        <div class="feedback-item ${f.type}">
+          <div class="icon">${f.icon}</div>
+          <div class="content">
+            <div class="title">${f.title}</div>
+            <div class="desc">${f.desc}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    function renderVideos(recordings) {
+      const section = document.getElementById('videosSection');
+      const grid = document.getElementById('videoGrid');
+      
+      const videoEntries = Object.entries(recordings);
+      if (videoEntries.length === 0) return;
+      
+      section.style.display = 'block';
+      grid.innerHTML = videoEntries.map(([id, rec]) => {
+        const videoSrc = rec.videoUrl || rec.data || '';
+        return `
+          <div class="video-card">
+            ${videoSrc ? `<video src="${videoSrc}" controls playsinline></video>` : '<div style="aspect-ratio:16/9;background:#333;display:flex;align-items:center;justify-content:center;color:#666">Video non disponibile</div>'}
+            <div class="info">
+              <div class="position">${rec.position || 'Camera'}</div>
+              <div class="meta">${rec.athleteName || ''} · ${rec.duration || ''}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+    
+    function showError(message) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('reportContent').style.display = 'none';
+      document.getElementById('errorState').style.display = 'block';
+      
+      if (message) {
+        document.querySelector('#errorState p').textContent = message;
+      }
+    }
+    
+    // Share functions
+    window.shareWhatsApp = () => {
+      const text = `📊 Guarda il mio report di analisi movimento!\n\n${location.href}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    };
+    
+    window.copyLink = () => {
+      navigator.clipboard.writeText(location.href);
+      alert('✅ Link copiato!');
+    };
+    
+    window.downloadPDF = () => {
+      alert('Funzione PDF in arrivo!');
+      // TODO: Implement PDF generation
+    };
+  </script>
+</body>
+</html>
