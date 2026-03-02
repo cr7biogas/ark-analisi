@@ -158,7 +158,7 @@
       </div>
       <div class="controls">
         <button class="btn btn-secondary" onclick="switchCam()">🔄 Flip</button>
-        <button class="btn btn-secondary" id="recBtn" onclick="toggleRecording()" style="display:none">⏺ REC</button>
+        <button class="btn btn-primary" id="recBtn" onclick="toggleRecording()">⏺ REC</button>
         <button class="btn btn-danger" onclick="stop()">⏹️ Esci</button>
       </div>
     </div>
@@ -325,7 +325,7 @@
       
       document.getElementById('setup').classList.add('hidden');
       document.getElementById('nameLabel').textContent = `${athleteName} - ${position}`;
-      document.getElementById('recBtn').style.display = 'block';
+      // recBtn is now always visible
       
       if (withPose) {
         document.getElementById('scoreBadge').style.display = 'block';
