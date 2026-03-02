@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>📹 Analisi Live - ARK Analisi</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    body { overflow-x: hidden; }
+    
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1fr 350px;
+      gap: 20px;
+      min-height: calc(100vh - 70px);
+    }
+    
+    @media (max-width: 900px) {
+      .main-layout { grid-template-columns: 1fr; }
+      .sidebar { position: fixed; bottom: 0; left: 0; right: 0; max-height: 50vh; overflow-y: auto; z-index: 100; }
+    }
+    
+    .video-section {
+      position: relative;
+    }
+    
+    .video-container {
+      aspect-ratio: 16/9;
+      background: #000;
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .video-container video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* Mirror */
+    }
+    
+    .video-container canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transform: scaleX(-1); /* Mirror */
+    }
+    
+    .score-overlay {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 15px 25px;
+      border-radius: var(--radius);
+      text-align: center;
+      backdrop-filter: blur(10px);
+    }
+    
+    .score-overlay .score {
+      font-size: 48px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .score-overlay .grade {
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 5px;
+    }
+    
+    .phase-indicator {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .phase-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 1s infinite;
+    }
+    
+    .rep-counter {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 15px 25px;
+      border-radius: var(--radius);
+      text-align: center;
+    }
+    
+    .rep-counter .count {
+      font-size: 36px;
+      font-weight: 800;
+    }
+    
+    .rep-counter .label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+    
+    .controls-bar {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+    
+    .sidebar {
+      background: var(--bg-secondary);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .sidebar h3 {
+      font-size: 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .feedback-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .movement-select {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    
+    .movement-btn {
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      border: 2px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    
+    .movement-btn:hover { border-color: var(--accent); }
+    .movement-btn.active { border-color: var(--accent); background: rgba(0, 212, 170, 0.1); }
+    .movement-btn .icon { font-size: 24px; display: block; margin-bottom: 4px; }
+    .movement-btn .name { font-size: 11px; }
+    
+    .angle-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    
+    .angle-item {
+      background: var(--bg-card);
+      padding: 10px;
+      border-radius: var(--radius-sm);
+      text-align: center;
+    }
+    
+    .angle-item .value {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    
+    .angle-item .label {
+      font-size: 10px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+    
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .stats-row:last-child { border-bottom: none; }
+    .stats-row .label { color: var(--text-secondary); }
+    .stats-row .value { font-weight: 600; }
+    
+    .loading {
+      position: fixed;
+      inset: 0;
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    
+    .loading.hidden { display: none; }
+    .loading .spinner { font-size: 60px; animation: pulse 1s infinite; }
+    .loading p { margin-top: 20px; color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">
+    <div class="spinner">🎯</div>
+    <p>Caricamento AI...</p>
+  </div>
+
+  <div class="header">
+    <a href="index.html" class="back">←</a>
+    <h1>📹 Analisi Live</h1>
+    <span id="movementName" style="margin-left:auto;color:var(--text-secondary)">Seleziona movimento</span>
+  </div>
+  
+  <div class="container">
+    <div class="main-layout">
+      <div class="video-section">
+        <div class="video-container">
+          <video id="video" autoplay playsinline></video>
+          <canvas id="canvas"></canvas>
+          
+          <div class="score-overlay" id="scoreOverlay" style="display:none">
+            <div class="score" id="score">--</div>
+            <div class="grade" id="grade">-</div>
+          </div>
+          
+          <div class="phase-indicator" id="phaseIndicator" style="display:none">
+            <div class="phase-dot"></div>
+            <span id="phaseName">Standing</span>
+          </div>
+          
+          <div class="rep-counter" id="repCounter" style="display:none">
+            <div class="count" id="repCount">0</div>
+            <div class="label">Reps</div>
+          </div>
+        </div>
+        
+        <div class="controls-bar">
+          <button class="btn btn-primary" id="startBtn" onclick="toggleAnalysis()">▶️ Avvia Analisi</button>
+          <button class="btn btn-secondary" onclick="flipCamera()">🔄 Flip Camera</button>
+          <button class="btn btn-secondary" onclick="resetStats()">🔄 Reset</button>
+          <button class="btn btn-secondary" onclick="toggleFullscreen()">⛶ Fullscreen</button>
+        </div>
+      </div>
+      
+      <div class="sidebar">
+        <div>
+          <h3>💪 Movimento</h3>
+          <div class="movement-select" id="movementSelect"></div>
+        </div>
+        
+        <div>
+          <h3>📐 Angoli</h3>
+          <div class="angle-grid" id="angleGrid">
+            <div class="angle-item"><div class="value">--</div><div class="label">L Knee</div></div>
+            <div class="angle-item"><div class="value">--</div><div class="label">R Knee</div></div>
+            <div class="angle-item"><div class="value">--</div><div class="label">L Hip</div></div>
+            <div class="angle-item"><div class="value">--</div><div class="label">R Hip</div></div>
+            <div class="angle-item"><div class="value">--</div><div class="label">Trunk</div></div>
+            <div class="angle-item"><div class="value">--</div><div class="label">Symmetry</div></div>
+          </div>
+        </div>
+        
+        <div>
+          <h3>💬 Feedback</h3>
+          <div class="feedback-list" id="feedbackList">
+            <div class="feedback good">
+              <span class="icon">🎯</span>
+              <span class="text">Seleziona un movimento e avvia l'analisi</span>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <h3>📊 Statistiche</h3>
+          <div class="stats" id="stats">
+            <div class="stats-row">
+              <span class="label">Media Score</span>
+              <span class="value" id="avgScore">--</span>
+            </div>
+            <div class="stats-row">
+              <span class="label">Best</span>
+              <span class="value" id="bestScore">--</span>
+            </div>
+            <div class="stats-row">
+              <span class="label">Reps</span>
+              <span class="value" id="totalReps">0</span>
+            </div>
+            <div class="stats-row">
+              <span class="label">Avg Rep Score</span>
+              <span class="value" id="avgRepScore">--</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { PoseEngine, SkeletonRenderer } from './lib/pose-engine.js';
+    import { getAllMovements } from './lib/movement-db.js';
+    import { ScoreCalculator, generateFeedback, getGrade } from './lib/scoring.js';
+    
+    // State
+    let poseEngine = null;
+    let skeletonRenderer = null;
+    let scoreCalculator = null;
+    let isRunning = false;
+    let currentMovement = null;
+    let facingMode = 'user';
+    
+    // Elements
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const loading = document.getElementById('loading');
+    
+    // Initialize movement selector
+    const movements = getAllMovements();
+    const movementSelect = document.getElementById('movementSelect');
+    movementSelect.innerHTML = movements.map(m => `
+      <button class="movement-btn" data-id="${m.id}">
+        <span class="icon">${m.icon}</span>
+        <span class="name">${m.name}</span>
+      </button>
+    `).join('');
+    
+    movementSelect.addEventListener('click', (e) => {
+      const btn = e.target.closest('.movement-btn');
+      if (!btn) return;
+      
+      document.querySelectorAll('.movement-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      currentMovement = btn.dataset.id;
+      const movement = movements.find(m => m.id === currentMovement);
+      document.getElementById('movementName').textContent = movement?.name || '';
+      
+      // Reset score calculator
+      if (scoreCalculator) scoreCalculator.reset();
+      scoreCalculator = new ScoreCalculator(currentMovement);
+    });
+    
+    // Check URL param for movement
+    const urlParams = new URLSearchParams(location.search);
+    const urlMovement = urlParams.get('m');
+    if (urlMovement) {
+      const btn = movementSelect.querySelector(`[data-id="${urlMovement}"]`);
+      if (btn) btn.click();
+    }
+    
+    // Initialize
+    async function init() {
+      try {
+        poseEngine = new PoseEngine({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+          onResults: handleResults,
+          onReady: () => {
+            loading.classList.add('hidden');
+            console.log('PoseEngine ready');
+          }
+        });
+        
+        await poseEngine.init();
+        
+        // Setup canvas
+        skeletonRenderer = new SkeletonRenderer(canvas, {
+          jointRadius: 6,
+          lineWidth: 3
+        });
+        
+      } catch (e) {
+        console.error('Init error:', e);
+        loading.innerHTML = `<p style="color:var(--danger)">Errore: ${e.message}</p>`;
+      }
+    }
+    
+    // Handle pose results
+    function handleResults(results) {
+      if (!results.detected) {
+        skeletonRenderer?.clear();
+        return;
+      }
+      
+      // Resize canvas if needed
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
+      
+      // Draw skeleton
+      skeletonRenderer.draw(results.landmarks, {
+        angles: results.angles,
+        centerOfMass: results.centerOfMass
+      });
+      
+      // Score if movement selected
+      if (currentMovement && scoreCalculator) {
+        const scoreResult = scoreCalculator.process(results);
+        updateUI(scoreResult, results);
+      } else {
+        updateAngles(results);
+      }
+    }
+    
+    // Update UI
+    function updateUI(scoreResult, poseResults) {
+      // Score
+      document.getElementById('score').textContent = scoreResult.score;
+      const gradeInfo = getGrade(scoreResult.score);
+      const gradeEl = document.getElementById('grade');
+      gradeEl.textContent = gradeInfo.grade;
+      gradeEl.style.color = gradeInfo.color;
+      document.getElementById('scoreOverlay').style.display = 'block';
+      
+      // Phase
+      document.getElementById('phaseName').textContent = scoreResult.phase;
+      document.getElementById('phaseIndicator').style.display = 'flex';
+      
+      // Reps
+      document.getElementById('repCount').textContent = scoreResult.repCount;
+      document.getElementById('repCounter').style.display = 'block';
+      
+      // Angles
+      updateAngles(poseResults);
+      
+      // Feedback
+      const feedback = generateFeedback(scoreResult);
+      const feedbackList = document.getElementById('feedbackList');
+      feedbackList.innerHTML = feedback.slice(0, 3).map(f => `
+        <div class="feedback ${f.type}">
+          <span class="icon">${f.icon}</span>
+          <span class="text">${f.text}</span>
+        </div>
+      `).join('');
+      
+      // Stats
+      const stats = scoreResult.stats;
+      document.getElementById('avgScore').textContent = stats.averageScore;
+      document.getElementById('bestScore').textContent = stats.bestScore;
+      document.getElementById('totalReps').textContent = stats.totalReps;
+      document.getElementById('avgRepScore').textContent = stats.averageRepScore || '--';
+    }
+    
+    // Update angle display
+    function updateAngles(results) {
+      const angles = results.angles || {};
+      const items = document.querySelectorAll('.angle-item .value');
+      items[0].textContent = angles.leftKnee ? `${angles.leftKnee}°` : '--';
+      items[1].textContent = angles.rightKnee ? `${angles.rightKnee}°` : '--';
+      items[2].textContent = angles.leftHip ? `${angles.leftHip}°` : '--';
+      items[3].textContent = angles.rightHip ? `${angles.rightHip}°` : '--';
+      items[4].textContent = angles.trunk !== undefined ? `${angles.trunk}°` : '--';
+      items[5].textContent = results.symmetry ? `${results.symmetry}%` : '--';
+      
+      // Color code
+      items.forEach((item, i) => {
+        const val = parseInt(item.textContent);
+        if (isNaN(val)) return;
+        
+        // Simple color coding
+        if (i < 4) { // Knee/Hip angles
+          if (val < 80 || val > 175) item.style.color = 'var(--accent)';
+          else if (val < 100 || val > 160) item.style.color = 'var(--warning)';
+          else item.style.color = 'var(--text-primary)';
+        } else if (i === 5) { // Symmetry
+          item.style.color = val > 80 ? 'var(--success)' : val > 60 ? 'var(--warning)' : 'var(--danger)';
+        }
+      });
+    }
+    
+    // Toggle analysis
+    window.toggleAnalysis = async () => {
+      const btn = document.getElementById('startBtn');
+      
+      if (isRunning) {
+        poseEngine.stopCamera();
+        isRunning = false;
+        btn.textContent = '▶️ Avvia Analisi';
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-primary');
+        return;
+      }
+      
+      try {
+        await poseEngine.startCamera(video, { facingMode, width: 1280, height: 720 });
+        isRunning = true;
+        btn.textContent = '⏹️ Stop';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-danger');
+      } catch (e) {
+        alert('Errore camera: ' + e.message);
+      }
+    };
+    
+    // Flip camera
+    window.flipCamera = async () => {
+      facingMode = facingMode === 'user' ? 'environment' : 'user';
+      if (isRunning) {
+        poseEngine.stopCamera();
+        await poseEngine.startCamera(video, { facingMode, width: 1280, height: 720 });
+      }
+    };
+    
+    // Reset stats
+    window.resetStats = () => {
+      if (scoreCalculator) scoreCalculator.reset();
+      document.getElementById('avgScore').textContent = '--';
+      document.getElementById('bestScore').textContent = '--';
+      document.getElementById('totalReps').textContent = '0';
+      document.getElementById('avgRepScore').textContent = '--';
+      document.getElementById('repCount').textContent = '0';
+    };
+    
+    // Fullscreen
+    window.toggleFullscreen = () => {
+      const container = document.querySelector('.video-container');
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        container.requestFullscreen();
+      }
+    };
+    
+    // Start
+    init();
+  </script>
+</body>
+</html>

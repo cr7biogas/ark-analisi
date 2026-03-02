@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>🎬 Replay & Analisi - ARK Analisi</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 20px;
+      min-height: calc(100vh - 70px);
+    }
+    
+    @media (max-width: 900px) {
+      .main-layout { grid-template-columns: 1fr; }
+    }
+    
+    .video-section { position: relative; }
+    
+    .video-container {
+      aspect-ratio: 16/9;
+      background: #000;
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .video-container video, .video-container canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    
+    .video-container canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    
+    /* Upload Area */
+    .upload-area {
+      border: 3px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 60px 30px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .upload-area:hover, .upload-area.dragover {
+      border-color: var(--accent);
+      background: rgba(0, 212, 170, 0.05);
+    }
+    
+    .upload-area .icon { font-size: 60px; margin-bottom: 20px; }
+    .upload-area h3 { margin-bottom: 10px; }
+    .upload-area p { color: var(--text-secondary); font-size: 14px; }
+    
+    .upload-area.hidden { display: none; }
+    
+    /* Timeline */
+    .timeline-container {
+      margin-top: 15px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius);
+      padding: 15px;
+    }
+    
+    .timeline-track {
+      height: 50px;
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    
+    .timeline-progress {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
+      width: 0%;
+      transition: width 0.1s;
+    }
+    
+    .timeline-markers {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+    }
+    
+    .timeline-marker {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--warning);
+    }
+    
+    .timeline-marker.fault { background: var(--danger); }
+    .timeline-marker.good { background: var(--success); }
+    
+    .timeline-controls {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-top: 15px;
+    }
+    
+    .timeline-controls .time {
+      font-family: monospace;
+      font-size: 14px;
+      min-width: 100px;
+    }
+    
+    .playback-speed {
+      margin-left: auto;
+      display: flex;
+      gap: 5px;
+    }
+    
+    .speed-btn {
+      padding: 5px 10px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 12px;
+    }
+    
+    .speed-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+    
+    /* Score Timeline */
+    .score-timeline {
+      height: 40px;
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      margin-top: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .score-bar {
+      position: absolute;
+      bottom: 0;
+      width: 2px;
+      background: var(--accent);
+    }
+    
+    /* Sidebar */
+    .sidebar {
+      background: var(--bg-secondary);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+    }
+    
+    .sidebar h3 {
+      font-size: 15px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    /* Frame Analysis */
+    .frame-analysis {
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      padding: 15px;
+    }
+    
+    .frame-score {
+      text-align: center;
+      margin-bottom: 15px;
+    }
+    
+    .frame-score .score {
+      font-size: 48px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .frame-score .grade {
+      font-size: 20px;
+      font-weight: 700;
+    }
+    
+    .angle-list {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    
+    .angle-item {
+      background: var(--bg-secondary);
+      padding: 8px;
+      border-radius: var(--radius-sm);
+      text-align: center;
+    }
+    
+    .angle-item .value { font-weight: 700; color: var(--accent); }
+    .angle-item .label { font-size: 10px; color: var(--text-secondary); }
+    
+    /* Export Panel */
+    .export-panel {
+      margin-top: auto;
+      padding-top: 15px;
+      border-top: 1px solid var(--border);
+    }
+    
+    .export-panel h3 { margin-bottom: 10px; }
+    
+    .export-options {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    /* Fault Timeline */
+    .fault-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .fault-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+      cursor: pointer;
+      border-left: 3px solid var(--danger);
+    }
+    
+    .fault-item:hover { background: rgba(233, 69, 96, 0.1); }
+    
+    .fault-item .time {
+      font-family: monospace;
+      font-size: 12px;
+      color: var(--text-secondary);
+      min-width: 50px;
+    }
+    
+    .fault-item .name { flex: 1; font-size: 13px; }
+    
+    .fault-item .severity {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--danger);
+    }
+    
+    .fault-item .severity.medium { background: var(--warning); color: #000; }
+    .fault-item .severity.low { background: var(--text-secondary); }
+    
+    /* Summary Card */
+    .summary-card {
+      background: linear-gradient(135deg, rgba(0, 212, 170, 0.1), rgba(0, 153, 255, 0.1));
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+    }
+    
+    .summary-stat {
+      text-align: center;
+    }
+    
+    .summary-stat .value {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--accent);
+    }
+    
+    .summary-stat .label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <a href="index.html" class="back">←</a>
+    <h1>🎬 Replay & Analisi</h1>
+    <span id="videoName" style="margin-left:auto;color:var(--text-secondary)"></span>
+  </div>
+  
+  <div class="container">
+    <div class="main-layout">
+      <div class="video-section">
+        <!-- Upload Area -->
+        <div class="upload-area" id="uploadArea">
+          <div class="icon">📁</div>
+          <h3>Carica un video</h3>
+          <p>Trascina qui o clicca per selezionare</p>
+          <p style="margin-top:10px;font-size:12px">Formati supportati: MP4, MOV, WebM</p>
+          <input type="file" id="fileInput" accept="video/*" style="display:none">
+        </div>
+        
+        <!-- Video Player -->
+        <div class="video-container" id="videoContainer" style="display:none">
+          <video id="video" playsinline></video>
+          <canvas id="canvas"></canvas>
+        </div>
+        
+        <!-- Timeline -->
+        <div class="timeline-container" id="timelineContainer" style="display:none">
+          <div class="timeline-track" id="timelineTrack">
+            <div class="timeline-progress" id="timelineProgress"></div>
+            <div class="timeline-markers" id="timelineMarkers"></div>
+          </div>
+          
+          <div class="score-timeline" id="scoreTimeline"></div>
+          
+          <div class="timeline-controls">
+            <button class="btn btn-secondary" id="playBtn" onclick="togglePlay()">▶️ Play</button>
+            <button class="btn btn-secondary" onclick="stepBack()">⏮️ -1s</button>
+            <button class="btn btn-secondary" onclick="stepForward()">⏭️ +1s</button>
+            <span class="time" id="timeDisplay">00:00 / 00:00</span>
+            
+            <div class="playback-speed">
+              <button class="speed-btn" onclick="setSpeed(0.25)">0.25x</button>
+              <button class="speed-btn" onclick="setSpeed(0.5)">0.5x</button>
+              <button class="speed-btn active" onclick="setSpeed(1)">1x</button>
+              <button class="speed-btn" onclick="setSpeed(2)">2x</button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Controls Bar -->
+        <div class="controls-bar" id="controlsBar" style="display:none">
+          <select id="movementSelect">
+            <option value="">-- Seleziona Movimento --</option>
+          </select>
+          <button class="btn btn-primary" id="analyzeBtn" onclick="startAnalysis()">🎯 Analizza Video</button>
+          <button class="btn btn-secondary" onclick="loadNewVideo()">📁 Nuovo Video</button>
+        </div>
+      </div>
+      
+      <div class="sidebar">
+        <div>
+          <h3>📊 Analisi Frame</h3>
+          <div class="frame-analysis" id="frameAnalysis">
+            <div class="frame-score">
+              <div class="score" id="frameScore">--</div>
+              <div class="grade" id="frameGrade">-</div>
+            </div>
+            <div class="angle-list" id="angleList">
+              <div class="angle-item"><div class="value">--</div><div class="label">L Knee</div></div>
+              <div class="angle-item"><div class="value">--</div><div class="label">R Knee</div></div>
+              <div class="angle-item"><div class="value">--</div><div class="label">L Hip</div></div>
+              <div class="angle-item"><div class="value">--</div><div class="label">R Hip</div></div>
+              <div class="angle-item"><div class="value">--</div><div class="label">Trunk</div></div>
+              <div class="angle-item"><div class="value">--</div><div class="label">Symmetry</div></div>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <h3>⚠️ Errori Rilevati</h3>
+          <div class="fault-list" id="faultList">
+            <p style="color:var(--text-secondary);text-align:center;padding:20px;font-size:13px">
+              Analizza il video per rilevare gli errori
+            </p>
+          </div>
+        </div>
+        
+        <div class="summary-card" id="summaryCard" style="display:none">
+          <h3 style="margin-bottom:15px">📈 Riepilogo</h3>
+          <div class="summary-stats">
+            <div class="summary-stat">
+              <div class="value" id="avgScore">--</div>
+              <div class="label">Score Medio</div>
+            </div>
+            <div class="summary-stat">
+              <div class="value" id="repCount">0</div>
+              <div class="label">Ripetizioni</div>
+            </div>
+            <div class="summary-stat">
+              <div class="value" id="faultCount">0</div>
+              <div class="label">Errori</div>
+            </div>
+            <div class="summary-stat">
+              <div class="value" id="bestPhase">-</div>
+              <div class="label">Fase Migliore</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="export-panel">
+          <h3>📥 Esporta</h3>
+          <div class="export-options">
+            <button class="btn btn-secondary" onclick="exportReport()">📄 Report PDF</button>
+            <button class="btn btn-secondary" onclick="exportCSV()">📊 Dati CSV</button>
+            <button class="btn btn-secondary" onclick="saveToFirebase()">☁️ Salva Cloud</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { DB } from './firebase-config.js';
+    import { PoseEngine, SkeletonRenderer } from './lib/pose-engine.js';
+    import { getAllMovements } from './lib/movement-db.js';
+    import { ScoreCalculator, generateFeedback, getGrade } from './lib/scoring.js';
+    
+    // Elements
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const videoContainer = document.getElementById('videoContainer');
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const timelineContainer = document.getElementById('timelineContainer');
+    const controlsBar = document.getElementById('controlsBar');
+    
+    // State
+    let poseEngine = null;
+    let skeletonRenderer = null;
+    let scoreCalculator = null;
+    let currentMovement = null;
+    let isAnalyzing = false;
+    let analysisResults = [];
+    let detectedFaults = [];
+    let currentSpeed = 1;
+    
+    // Setup movements
+    const movements = getAllMovements();
+    const movementSelect = document.getElementById('movementSelect');
+    movementSelect.innerHTML = '<option value="">-- Seleziona Movimento --</option>' +
+      movements.map(m => `<option value="${m.id}">${m.icon} ${m.name}</option>`).join('');
+    
+    movementSelect.addEventListener('change', (e) => {
+      currentMovement = e.target.value || null;
+      if (currentMovement) {
+        scoreCalculator = new ScoreCalculator(currentMovement);
+      }
+    });
+    
+    // Upload handlers
+    uploadArea.addEventListener('click', () => fileInput.click());
+    
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('video/')) {
+        loadVideo(file);
+      }
+    });
+    
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) loadVideo(file);
+    });
+    
+    function loadVideo(file) {
+      const url = URL.createObjectURL(file);
+      video.src = url;
+      video.load();
+      
+      document.getElementById('videoName').textContent = file.name;
+      
+      video.onloadedmetadata = () => {
+        uploadArea.style.display = 'none';
+        videoContainer.style.display = 'block';
+        timelineContainer.style.display = 'block';
+        controlsBar.style.display = 'flex';
+        
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        updateTimeDisplay();
+      };
+    }
+    
+    window.loadNewVideo = () => {
+      video.pause();
+      video.src = '';
+      uploadArea.style.display = 'block';
+      videoContainer.style.display = 'none';
+      timelineContainer.style.display = 'none';
+      controlsBar.style.display = 'none';
+      document.getElementById('summaryCard').style.display = 'none';
+      analysisResults = [];
+      detectedFaults = [];
+      fileInput.value = '';
+    };
+    
+    // Video controls
+    window.togglePlay = () => {
+      if (video.paused) {
+        video.play();
+        document.getElementById('playBtn').textContent = '⏸️ Pause';
+      } else {
+        video.pause();
+        document.getElementById('playBtn').textContent = '▶️ Play';
+      }
+    };
+    
+    window.stepBack = () => { video.currentTime = Math.max(0, video.currentTime - 1); };
+    window.stepForward = () => { video.currentTime = Math.min(video.duration, video.currentTime + 1); };
+    
+    window.setSpeed = (speed) => {
+      currentSpeed = speed;
+      video.playbackRate = speed;
+      document.querySelectorAll('.speed-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.includes(speed + 'x'));
+      });
+    };
+    
+    // Timeline
+    const timelineTrack = document.getElementById('timelineTrack');
+    timelineTrack.addEventListener('click', (e) => {
+      const rect = timelineTrack.getBoundingClientRect();
+      const percent = (e.clientX - rect.left) / rect.width;
+      video.currentTime = percent * video.duration;
+    });
+    
+    video.addEventListener('timeupdate', () => {
+      updateTimeDisplay();
+      
+      // Update timeline
+      const percent = (video.currentTime / video.duration) * 100;
+      document.getElementById('timelineProgress').style.width = percent + '%';
+      
+      // If analyzing, process current frame
+      if (isAnalyzing && poseEngine?.isReady) {
+        processCurrentFrame();
+      }
+    });
+    
+    function updateTimeDisplay() {
+      const current = formatTime(video.currentTime);
+      const total = formatTime(video.duration || 0);
+      document.getElementById('timeDisplay').textContent = `${current} / ${total}`;
+    }
+    
+    function formatTime(seconds) {
+      const min = Math.floor(seconds / 60);
+      const sec = Math.floor(seconds % 60);
+      return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    }
+    
+    // Analysis
+    window.startAnalysis = async () => {
+      if (!currentMovement) {
+        alert('Seleziona prima un movimento');
+        return;
+      }
+      
+      const btn = document.getElementById('analyzeBtn');
+      
+      if (isAnalyzing) {
+        // Stop analysis
+        isAnalyzing = false;
+        btn.textContent = '🎯 Analizza Video';
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-primary');
+        showSummary();
+        return;
+      }
+      
+      // Initialize pose engine if needed
+      if (!poseEngine) {
+        btn.textContent = '⏳ Caricamento AI...';
+        btn.disabled = true;
+        
+        poseEngine = new PoseEngine({
+          modelComplexity: 1,
+          onResults: handleResults,
+          onReady: () => {
+            console.log('PoseEngine ready');
+            btn.disabled = false;
+            btn.textContent = '🎯 Analizza Video';
+          }
+        });
+        
+        await poseEngine.init();
+        skeletonRenderer = new SkeletonRenderer(canvas);
+      }
+      
+      // Reset
+      analysisResults = [];
+      detectedFaults = [];
+      scoreCalculator = new ScoreCalculator(currentMovement);
+      
+      // Start analysis
+      isAnalyzing = true;
+      btn.textContent = '⏹️ Stop Analisi';
+      btn.classList.remove('btn-primary');
+      btn.classList.add('btn-danger');
+      
+      // Start from beginning
+      video.currentTime = 0;
+      video.play();
+    };
+    
+    async function processCurrentFrame() {
+      try {
+        await poseEngine.processFrame(video);
+      } catch (e) {
+        console.error('Frame processing error:', e);
+      }
+    }
+    
+    function handleResults(results) {
+      if (!results.detected) {
+        skeletonRenderer?.clear();
+        return;
+      }
+      
+      // Draw skeleton
+      skeletonRenderer.draw(results.landmarks, {
+        angles: results.angles
+      });
+      
+      // Score
+      if (scoreCalculator) {
+        const scoreResult = scoreCalculator.process(results);
+        
+        // Store result
+        analysisResults.push({
+          time: video.currentTime,
+          score: scoreResult.score,
+          phase: scoreResult.phase,
+          angles: results.angles,
+          symmetry: results.symmetry,
+          faults: scoreResult.faults
+        });
+        
+        // Track faults
+        for (const fault of scoreResult.faults) {
+          detectedFaults.push({
+            time: video.currentTime,
+            ...fault
+          });
+        }
+        
+        updateFrameUI(scoreResult, results);
+        updateScoreTimeline();
+        updateFaultList();
+      }
+    }
+    
+    function updateFrameUI(scoreResult, poseResults) {
+      // Score
+      document.getElementById('frameScore').textContent = scoreResult.score;
+      const gradeInfo = getGrade(scoreResult.score);
+      const gradeEl = document.getElementById('frameGrade');
+      gradeEl.textContent = gradeInfo.grade;
+      gradeEl.style.color = gradeInfo.color;
+      
+      // Angles
+      const angles = poseResults.angles || {};
+      const items = document.querySelectorAll('#angleList .angle-item .value');
+      items[0].textContent = angles.leftKnee ? `${angles.leftKnee}°` : '--';
+      items[1].textContent = angles.rightKnee ? `${angles.rightKnee}°` : '--';
+      items[2].textContent = angles.leftHip ? `${angles.leftHip}°` : '--';
+      items[3].textContent = angles.rightHip ? `${angles.rightHip}°` : '--';
+      items[4].textContent = angles.trunk !== undefined ? `${angles.trunk}°` : '--';
+      items[5].textContent = poseResults.symmetry ? `${poseResults.symmetry}%` : '--';
+    }
+    
+    function updateScoreTimeline() {
+      const timeline = document.getElementById('scoreTimeline');
+      const width = timeline.offsetWidth;
+      const duration = video.duration;
+      
+      timeline.innerHTML = analysisResults.map(r => {
+        const x = (r.time / duration) * width;
+        const height = (r.score / 100) * 40;
+        const color = r.score > 70 ? 'var(--accent)' : r.score > 50 ? 'var(--warning)' : 'var(--danger)';
+        return `<div class="score-bar" style="left:${x}px;height:${height}px;background:${color}"></div>`;
+      }).join('');
+    }
+    
+    function updateFaultList() {
+      const list = document.getElementById('faultList');
+      
+      // Group faults to avoid duplicates
+      const grouped = [];
+      const seen = new Set();
+      
+      for (const fault of detectedFaults) {
+        const key = `${fault.name}_${Math.floor(fault.time)}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          grouped.push(fault);
+        }
+      }
+      
+      if (grouped.length === 0) {
+        list.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px;font-size:13px">Nessun errore rilevato 🎉</p>';
+        return;
+      }
+      
+      list.innerHTML = grouped.slice(-20).reverse().map(f => `
+        <div class="fault-item" onclick="seekTo(${f.time})">
+          <span class="time">${formatTime(f.time)}</span>
+          <span class="name">${f.name}</span>
+          <span class="severity ${f.severity}">${f.severity}</span>
+        </div>
+      `).join('');
+    }
+    
+    window.seekTo = (time) => {
+      video.currentTime = time;
+      video.pause();
+      document.getElementById('playBtn').textContent = '▶️ Play';
+    };
+    
+    function showSummary() {
+      const card = document.getElementById('summaryCard');
+      card.style.display = 'block';
+      
+      const stats = scoreCalculator?.getStats() || {};
+      
+      document.getElementById('avgScore').textContent = stats.averageScore || '--';
+      document.getElementById('repCount').textContent = stats.totalReps || 0;
+      document.getElementById('faultCount').textContent = detectedFaults.length;
+      
+      // Find best phase
+      const phaseCounts = {};
+      analysisResults.forEach(r => {
+        if (r.phase && r.score > 70) {
+          phaseCounts[r.phase] = (phaseCounts[r.phase] || 0) + 1;
+        }
+      });
+      const bestPhase = Object.entries(phaseCounts).sort((a, b) => b[1] - a[1])[0];
+      document.getElementById('bestPhase').textContent = bestPhase?.[0] || '-';
+      
+      // Update timeline markers
+      const markers = document.getElementById('timelineMarkers');
+      markers.innerHTML = detectedFaults.map(f => {
+        const x = (f.time / video.duration) * 100;
+        return `<div class="timeline-marker fault" style="left:${x}%"></div>`;
+      }).join('');
+    }
+    
+    // Export functions
+    window.exportReport = () => {
+      alert('Funzione report PDF in arrivo!');
+      // TODO: Generate PDF with jsPDF
+    };
+    
+    window.exportCSV = () => {
+      if (analysisResults.length === 0) {
+        alert('Nessun dato da esportare. Analizza prima il video.');
+        return;
+      }
+      
+      const headers = ['Time', 'Score', 'Phase', 'L_Knee', 'R_Knee', 'L_Hip', 'R_Hip', 'Trunk', 'Symmetry'];
+      const rows = analysisResults.map(r => [
+        r.time.toFixed(2),
+        r.score,
+        r.phase,
+        r.angles?.leftKnee || '',
+        r.angles?.rightKnee || '',
+        r.angles?.leftHip || '',
+        r.angles?.rightHip || '',
+        r.angles?.trunk || '',
+        r.symmetry || ''
+      ]);
+      
+      const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `analisi_${currentMovement}_${Date.now()}.csv`;
+      a.click();
+    };
+    
+    window.saveToFirebase = async () => {
+      if (analysisResults.length === 0) {
+        alert('Nessun dato da salvare. Analizza prima il video.');
+        return;
+      }
+      
+      const stats = scoreCalculator?.getStats() || {};
+      const data = {
+        movement: currentMovement,
+        videoName: document.getElementById('videoName').textContent,
+        timestamp: Date.now(),
+        stats,
+        faultCount: detectedFaults.length,
+        topFaults: detectedFaults.slice(0, 10)
+      };
+      
+      try {
+        const id = await DB.push('analyses', data);
+        alert(`✅ Salvato! ID: ${id}`);
+      } catch (e) {
+        alert('Errore salvataggio: ' + e.message);
+      }
+    };
+    
+    // Stop analysis when video ends
+    video.addEventListener('ended', () => {
+      if (isAnalyzing) {
+        isAnalyzing = false;
+        document.getElementById('analyzeBtn').textContent = '🎯 Analizza Video';
+        document.getElementById('analyzeBtn').classList.remove('btn-danger');
+        document.getElementById('analyzeBtn').classList.add('btn-primary');
+        showSummary();
+      }
+    });
+  </script>
+</body>
+</html>

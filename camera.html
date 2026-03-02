@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>📱 ARK Camera</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    body { background: #000; overflow: hidden; height: 100vh; }
+    
+    .container { height: 100%; display: flex; flex-direction: column; padding: 0; max-width: 100%; }
+    
+    video { 
+      flex: 1; 
+      width: 100%; 
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+    
+    .overlay {
+      position: absolute; top: 0; left: 0; right: 0;
+      padding: 15px 20px;
+      background: linear-gradient(rgba(0,0,0,0.8), transparent);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    
+    .status { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .cam-label { 
+      background: var(--accent); 
+      padding: 6px 14px; 
+      border-radius: 20px; 
+      font-size: 13px; 
+      font-weight: 600;
+      color: #000;
+    }
+    
+    .bottom-panel {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.95));
+      padding: 30px 20px 30px;
+    }
+    
+    .info { text-align: center; margin-bottom: 20px; }
+    .info .label { font-size: 11px; color: var(--text-secondary); margin-bottom: 5px; }
+    .info .value { font-size: 28px; font-weight: 700; color: var(--accent); }
+    .info .sub { font-size: 12px; color: #666; margin-top: 5px; }
+    
+    .controls { display: flex; gap: 10px; justify-content: center; }
+    .stats { display: flex; justify-content: center; gap: 20px; margin-top: 15px; font-size: 11px; color: #666; }
+    .stats span { color: #fff; }
+    
+    /* Setup Screen */
+    .setup {
+      position: fixed; inset: 0;
+      background: linear-gradient(135deg, #0a0a0f, #1a1a2e);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 30px; z-index: 100;
+    }
+    .setup.hidden { display: none; }
+    .setup .logo { font-size: 70px; margin-bottom: 15px; }
+    .setup h1 { font-size: 26px; margin-bottom: 8px; }
+    .setup p { color: var(--text-secondary); font-size: 14px; margin-bottom: 30px; text-align: center; }
+    
+    .setup .form-group { width: 100%; max-width: 280px; margin-bottom: 15px; }
+    .setup input, .setup select {
+      width: 100%; 
+      padding: 15px; 
+      border-radius: 12px;
+      border: 2px solid var(--border); 
+      background: rgba(255,255,255,0.05);
+      color: white; 
+      font-size: 16px; 
+      text-align: center;
+    }
+    .setup input:focus, .setup select:focus { border-color: var(--accent); }
+    .setup .btn { width: 100%; max-width: 280px; padding: 15px; font-size: 16px; }
+    .setup .error { 
+      background: rgba(231,76,60,0.2); 
+      color: var(--danger); 
+      padding: 12px; 
+      border-radius: 10px; 
+      margin-bottom: 15px; 
+      font-size: 13px; 
+      max-width: 280px;
+      text-align: center;
+    }
+    .setup .error.hidden { display: none; }
+  </style>
+</head>
+<body>
+  <!-- Setup Screen -->
+  <div class="setup" id="setup">
+    <div class="logo">📱</div>
+    <h1>ARK Camera</h1>
+    <p>Connetti questo dispositivo per trasmettere video alla dashboard</p>
+    
+    <div class="error hidden" id="error"></div>
+    
+    <div class="form-group">
+      <input type="text" id="athleteName" placeholder="👤 Nome Atleta" required>
+    </div>
+    
+    <div class="form-group">
+      <select id="position">
+        <option value="0">📍 Posizione 1 (Frontale)</option>
+        <option value="1">📍 Posizione 2 (Laterale)</option>
+        <option value="2">📍 Posizione 3 (Posteriore)</option>
+        <option value="3">📍 Posizione 4 (Altro)</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <select id="quality">
+        <option value="1080">📹 1080p (Full HD)</option>
+        <option value="720" selected>📹 720p (HD) - Consigliato</option>
+        <option value="480">📹 480p (SD)</option>
+      </select>
+    </div>
+    
+    <button class="btn btn-primary" onclick="startCamera()">🎬 Avvia Camera</button>
+  </div>
+  
+  <!-- Camera View -->
+  <div class="container">
+    <video id="video" autoplay playsinline muted></video>
+    
+    <div class="overlay">
+      <div class="status">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Offline</span>
+      </div>
+      <div class="cam-label" id="nameLabel">Camera</div>
+      <a href="index.html" style="background:rgba(255,255,255,0.2);padding:6px 12px;border-radius:20px;text-decoration:none;color:white;font-size:12px;">🏠</a>
+    </div>
+    
+    <div class="bottom-panel">
+      <div class="info">
+        <div class="label">CAMERA ID</div>
+        <div class="value" id="camId">---</div>
+        <div class="sub" id="connInfo">In attesa di connessione...</div>
+      </div>
+      
+      <div class="controls">
+        <button class="btn btn-secondary" onclick="switchCamera()">🔄 Flip</button>
+        <button class="btn btn-secondary" onclick="toggleFlash()">💡 Flash</button>
+        <button class="btn btn-danger" onclick="stopCamera()">⏹️ Stop</button>
+      </div>
+      
+      <div class="stats">
+        Viewers: <span id="viewerCount">0</span> |
+        Quality: <span id="qualityLabel">720p</span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { DB } from './firebase-config.js';
+    
+    const ICE_SERVERS = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ];
+    const HEARTBEAT_INTERVAL = 5000;
+    const VIEWER_IDS = ['viewer', 'coach', 'replay'];
+    
+    // State
+    let camId = null;
+    let athleteName = '';
+    let quality = '720';
+    let stream = null;
+    let facingMode = 'environment'; // Back camera by default for phone
+    let heartbeatInterval = null;
+    
+    // Multiple peer connections
+    const viewers = new Map();
+    
+    function log(msg) { console.log(`[Camera ${camId || '?'}] ${msg}`); }
+    
+    function setStatus(status, text) {
+      const dot = document.getElementById('statusDot');
+      dot.className = 'status-dot ' + status;
+      document.getElementById('statusText').textContent = text;
+    }
+    
+    function updateViewerCount() {
+      let count = 0;
+      viewers.forEach(v => { if (v.pc?.connectionState === 'connected') count++; });
+      document.getElementById('viewerCount').textContent = count;
+      document.getElementById('connInfo').textContent = count > 0 ? `${count} viewer connessi` : 'In attesa...';
+      setStatus(count > 0 ? 'online' : 'connecting', count > 0 ? 'Live' : 'In attesa...');
+    }
+    
+    window.startCamera = async () => {
+      athleteName = document.getElementById('athleteName').value.trim() || 'Atleta';
+      const position = parseInt(document.getElementById('position').value);
+      quality = document.getElementById('quality').value;
+      
+      const positionNames = ['Frontale', 'Laterale', 'Posteriore', 'Altro'];
+      const camName = `${athleteName} - ${positionNames[position]}`;
+      
+      const res = {
+        '1080': { w: 1920, h: 1080 },
+        '720': { w: 1280, h: 720 },
+        '480': { w: 854, h: 480 }
+      }[quality];
+      
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode, 
+            width: { ideal: res.w }, 
+            height: { ideal: res.h }, 
+            frameRate: { ideal: 30 } 
+          },
+          audio: false
+        });
+        
+        document.getElementById('video').srcObject = stream;
+        document.getElementById('setup').classList.add('hidden');
+        document.getElementById('nameLabel').textContent = camName;
+        document.getElementById('qualityLabel').textContent = quality + 'p';
+        
+        // Wake lock
+        if ('wakeLock' in navigator) {
+          try { await navigator.wakeLock.request('screen'); } catch(e) {}
+        }
+        
+        // Generate camera ID
+        camId = 'cam_' + Math.random().toString(36).substr(2, 8);
+        document.getElementById('camId').textContent = camId;
+        
+        // Register in Firebase
+        await DB.set(`streams/${camId}`, {
+          name: camName,
+          athleteName,
+          quality,
+          position,
+          status: 'waiting',
+          createdAt: Date.now(),
+          lastHeartbeat: Date.now()
+        });
+        
+        setStatus('connecting', 'In attesa...');
+        
+        // Listen for viewer offers
+        VIEWER_IDS.forEach(viewerId => listenForViewer(viewerId));
+        
+        // Heartbeat
+        heartbeatInterval = setInterval(async () => {
+          await DB.update(`streams/${camId}`, { lastHeartbeat: Date.now() });
+        }, HEARTBEAT_INTERVAL);
+        
+        log('Camera started');
+        
+      } catch (e) {
+        const error = document.getElementById('error');
+        error.textContent = '❌ ' + e.message;
+        error.classList.remove('hidden');
+      }
+    };
+    
+    function listenForViewer(viewerId) {
+      const offerPath = `streams/${camId}/${viewerId}Offer`;
+      
+      DB.listen(offerPath, async (offer) => {
+        if (!offer) return;
+        
+        log(`Offer from ${viewerId}`);
+        
+        // Cleanup old connection
+        if (viewers.has(viewerId)) {
+          const old = viewers.get(viewerId);
+          old.unsubscribers.forEach(fn => fn?.());
+          old.pc?.close();
+        }
+        
+        await createPeerConnection(viewerId, offer);
+      });
+    }
+    
+    async function createPeerConnection(viewerId, offer) {
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      const viewer = { pc, addedCandidates: new Set(), unsubscribers: [] };
+      viewers.set(viewerId, viewer);
+      
+      // Add stream
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      
+      // ICE candidates
+      pc.onicecandidate = async (e) => {
+        if (e.candidate && !e.candidate.candidate.includes('.local')) {
+          const id = `${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+          await DB.set(`streams/${camId}/${viewerId}CameraCandidates/${id}`, e.candidate.toJSON());
+        }
+      };
+      
+      // Connection state
+      pc.onconnectionstatechange = () => {
+        log(`${viewerId}: ${pc.connectionState}`);
+        updateViewerCount();
+        if (pc.connectionState === 'connected') {
+          DB.update(`streams/${camId}`, { status: 'streaming' });
+        }
+      };
+      
+      // Set offer and create answer
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await DB.set(`streams/${camId}/${viewerId}Answer`, { type: answer.type, sdp: answer.sdp });
+      
+      log(`Answer sent to ${viewerId}`);
+      
+      // Listen for viewer candidates
+      const unsub = DB.listen(`streams/${camId}/${viewerId}Candidates`, async (cands) => {
+        if (!cands || !pc) return;
+        for (const [id, cand] of Object.entries(cands)) {
+          if (viewer.addedCandidates.has(id)) continue;
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(cand));
+            viewer.addedCandidates.add(id);
+          } catch(e) {}
+        }
+      });
+      viewer.unsubscribers.push(unsub);
+    }
+    
+    window.switchCamera = async () => {
+      facingMode = facingMode === 'environment' ? 'user' : 'environment';
+      
+      const res = {
+        '1080': { w: 1920, h: 1080 },
+        '720': { w: 1280, h: 720 },
+        '480': { w: 854, h: 480 }
+      }[quality];
+      
+      const oldStream = stream;
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode, width: { ideal: res.w }, height: { ideal: res.h } },
+        audio: false
+      });
+      
+      document.getElementById('video').srcObject = stream;
+      
+      // Replace track in all peer connections
+      const newTrack = stream.getVideoTracks()[0];
+      viewers.forEach(v => {
+        const sender = v.pc?.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) sender.replaceTrack(newTrack);
+      });
+      
+      oldStream.getTracks().forEach(t => t.stop());
+    };
+    
+    window.toggleFlash = async () => {
+      const track = stream?.getVideoTracks()[0];
+      try {
+        const caps = track?.getCapabilities?.();
+        if (caps?.torch) {
+          const settings = track.getSettings();
+          await track.applyConstraints({ advanced: [{ torch: !settings.torch }] });
+        } else {
+          alert('Flash non disponibile');
+        }
+      } catch (e) {}
+    };
+    
+    window.stopCamera = async () => {
+      clearInterval(heartbeatInterval);
+      viewers.forEach(v => {
+        v.unsubscribers.forEach(fn => fn?.());
+        v.pc?.close();
+      });
+      stream?.getTracks().forEach(t => t.stop());
+      if (camId) await DB.remove(`streams/${camId}`);
+      location.reload();
+    };
+    
+    // Cleanup on page close
+    window.addEventListener('pagehide', () => {
+      if (camId) DB.remove(`streams/${camId}`);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>🎯 ARK Analisi - Home</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    .hero {
+      text-align: center;
+      padding: 60px 20px;
+      background: linear-gradient(135deg, rgba(0, 212, 170, 0.1), rgba(0, 153, 255, 0.1));
+      border-radius: 20px;
+      margin-bottom: 40px;
+    }
+    .hero .icon { font-size: 80px; margin-bottom: 20px; }
+    .hero h1 { font-size: 42px; margin-bottom: 10px; }
+    .hero p { color: var(--text-secondary); font-size: 18px; }
+    
+    .nav-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+    
+    .nav-card {
+      background: var(--bg-secondary);
+      border-radius: var(--radius);
+      padding: 30px;
+      text-decoration: none;
+      color: inherit;
+      border: 2px solid transparent;
+      transition: all 0.3s;
+    }
+    .nav-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-5px);
+    }
+    .nav-card .icon { font-size: 48px; margin-bottom: 15px; display: block; }
+    .nav-card h3 { font-size: 22px; margin-bottom: 8px; }
+    .nav-card p { color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+    
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+    .feature {
+      background: var(--bg-card);
+      padding: 20px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: flex-start;
+      gap: 15px;
+    }
+    .feature .icon { font-size: 28px; }
+    .feature h4 { margin-bottom: 5px; }
+    .feature p { color: var(--text-secondary); font-size: 13px; }
+    
+    .footer {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="hero">
+      <div class="icon">🎯</div>
+      <h1>ARK Analisi</h1>
+      <p>Analisi posturale e valutazione movimenti in tempo reale</p>
+    </div>
+    
+    <div class="nav-grid">
+      <a href="analisi.html" class="nav-card">
+        <span class="icon">📹</span>
+        <h3>Analisi Live</h3>
+        <p>Analizza i tuoi movimenti in tempo reale con feedback istantaneo sulla tecnica.</p>
+      </a>
+      
+      <a href="camera.html" class="nav-card">
+        <span class="icon">📱</span>
+        <h3>Camera Remota</h3>
+        <p>Usa il telefono come camera per trasmettere video alla dashboard coach.</p>
+      </a>
+      
+      <a href="coach.html" class="nav-card">
+        <span class="icon">👁️</span>
+        <h3>Vista Coach</h3>
+        <p>Monitora più atleti contemporaneamente con analisi multi-camera.</p>
+      </a>
+      
+      <a href="replay.html" class="nav-card">
+        <span class="icon">🎬</span>
+        <h3>Replay & Analisi</h3>
+        <p>Carica un video registrato per analisi dettagliata frame-by-frame.</p>
+      </a>
+    </div>
+    
+    <div class="card">
+      <h2>✨ Funzionalità</h2>
+      <div class="features">
+        <div class="feature">
+          <span class="icon">🦴</span>
+          <div>
+            <h4>Pose Estimation</h4>
+            <p>Tracciamento 33 punti del corpo con MediaPipe AI</p>
+          </div>
+        </div>
+        <div class="feature">
+          <span class="icon">📐</span>
+          <div>
+            <h4>Analisi Angoli</h4>
+            <p>Calcolo preciso degli angoli articolari in tempo reale</p>
+          </div>
+        </div>
+        <div class="feature">
+          <span class="icon">⚖️</span>
+          <div>
+            <h4>Simmetria</h4>
+            <p>Valutazione bilanciamento sinistra/destra</p>
+          </div>
+        </div>
+        <div class="feature">
+          <span class="icon">⚡</span>
+          <div>
+            <h4>Fault Detection</h4>
+            <p>Identificazione automatica errori tecnici</p>
+          </div>
+        </div>
+        <div class="feature">
+          <span class="icon">📊</span>
+          <div>
+            <h4>Scoring</h4>
+            <p>Punteggio qualità movimento 0-100</p>
+          </div>
+        </div>
+        <div class="feature">
+          <span class="icon">🔄</span>
+          <div>
+            <h4>Rep Counter</h4>
+            <p>Conteggio automatico ripetizioni</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="card mt-2">
+      <h2>💪 Movimenti Supportati</h2>
+      <div class="movement-grid" id="movementGrid"></div>
+    </div>
+    
+    <div class="footer">
+      <p>ARK Analisi v1.0 • Powered by MediaPipe & Firebase</p>
+      <p>Sistema di analisi posturale per allenamento</p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { getAllMovements } from './lib/movement-db.js';
+    
+    const movements = getAllMovements();
+    const grid = document.getElementById('movementGrid');
+    
+    grid.innerHTML = movements.map(m => `
+      <a href="analisi.html?m=${m.id}" class="movement-card">
+        <div class="icon">${m.icon}</div>
+        <div class="name">${m.name}</div>
+      </a>
+    `).join('');
+  </script>
+</body>
+</html>
