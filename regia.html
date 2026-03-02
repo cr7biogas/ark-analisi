@@ -488,13 +488,22 @@
       cam.pc = pc;
       
       pc.ontrack = (e) => {
-        console.log(`[${camId}] Video received!`);
+        console.log(`[${camId}] Video received!`, e.streams[0]?.getTracks());
         cam.stream = e.streams[0];
         video.srcObject = e.streams[0];
-        noVideo.style.display = 'none';
         
-        document.getElementById(`slot-${camId}`)?.classList.add('connected');
-        document.getElementById(`dot-${camId}`).className = 'status-dot ready';
+        // Force play
+        video.play().then(() => {
+          console.log(`[${camId}] Video playing`);
+          noVideo.style.display = 'none';
+          document.getElementById(`slot-${camId}`)?.classList.add('connected');
+          document.getElementById(`dot-${camId}`).className = 'status-dot ready';
+        }).catch(err => {
+          console.warn(`[${camId}] Video play failed:`, err);
+          // Try muted autoplay
+          video.muted = true;
+          video.play().catch(() => {});
+        });
       };
       
       pc.onicecandidate = async (e) => {
