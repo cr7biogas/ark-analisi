@@ -396,6 +396,21 @@
     }
     
     function removeSlot(camId) {
+      // Cleanup camera resources
+      const cam = cameras.get(camId);
+      if (cam) {
+        // Close WebRTC connection
+        if (cam.pc) {
+          cam.pc.close();
+          cam.pc = null;
+        }
+        // Unsubscribe Firebase listeners
+        if (cam.unsubscribers) {
+          cam.unsubscribers.forEach(fn => fn?.());
+          cam.unsubscribers = [];
+        }
+      }
+      
       const slot = document.getElementById(`slot-${camId}`);
       if (slot) slot.remove();
       
@@ -419,10 +434,14 @@
       const video = document.getElementById(`video-${camId}`);
       if (!video) return;
       
-      // Cleanup old connection
+      // Cleanup old connection and listeners
       if (cam.pc) {
         cam.pc.close();
         cam.pc = null;
+      }
+      if (cam.unsubscribers) {
+        cam.unsubscribers.forEach(fn => fn?.());
+        cam.unsubscribers = [];
       }
       
       // Clear old signaling
@@ -465,23 +484,38 @@
       await pc.setLocalDescription(offer);
       await DB.set(`streams/${camId}/coachOffer`, { type: offer.type, sdp: offer.sdp });
       
+      // Store unsubscribers for cleanup
+      cam.unsubscribers = cam.unsubscribers || [];
+      
       // Listen for answer
+      let candidatesListenerStarted = false;
       const unsubAnswer = DB.listen(`streams/${camId}/coachAnswer`, async (answer) => {
-        if (!answer || !pc || pc.signalingState === 'stable') return;
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        // Check connection is still valid
+        if (!answer || !pc || pc.signalingState === 'closed' || pc.signalingState === 'stable') return;
         
-        // Listen for camera candidates
-        DB.listen(`streams/${camId}/coachCameraCandidates`, async (cands) => {
-          if (!cands || !pc) return;
-          for (const [id, cand] of Object.entries(cands)) {
-            if (cam.addedCandidates.has(id)) continue;
-            try {
-              await pc.addIceCandidate(new RTCIceCandidate(cand));
-              cam.addedCandidates.add(id);
-            } catch(e) {}
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          
+          // Listen for camera candidates (only once)
+          if (!candidatesListenerStarted) {
+            candidatesListenerStarted = true;
+            const unsubCands = DB.listen(`streams/${camId}/coachCameraCandidates`, async (cands) => {
+              if (!cands || !pc || pc.connectionState === 'closed') return;
+              for (const [id, cand] of Object.entries(cands)) {
+                if (cam.addedCandidates.has(id)) continue;
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(cand));
+                  cam.addedCandidates.add(id);
+                } catch(e) {}
+              }
+            });
+            cam.unsubscribers.push(unsubCands);
           }
-        });
+        } catch(e) {
+          console.warn(`[${camId}] setRemoteDescription error:`, e.message);
+        }
       });
+      cam.unsubscribers.push(unsubAnswer);
     }
     
     // Toggle analysis for a camera
