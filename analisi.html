@@ -224,7 +224,7 @@
 <body>
   <div class="loading" id="loading">
     <div class="spinner">🎯</div>
-    <p>Caricamento AI...</p>
+    <p id="loadingText">Caricamento AI...</p>
   </div>
 
   <div class="header">
@@ -369,8 +369,19 @@
       if (btn) btn.click();
     }
     
-    // Initialize
+    // Initialize - lazy load (don't block page)
     async function init() {
+      // Just hide loading, we'll init MediaPipe when user clicks start
+      loading.classList.add('hidden');
+      console.log('Page ready. MediaPipe will load on first analysis.');
+    }
+    
+    async function ensurePoseEngine() {
+      if (poseEngine?.isReady) return true;
+      
+      loading.classList.remove('hidden');
+      document.getElementById('loadingText').textContent = 'Caricamento MediaPipe AI...';
+      
       try {
         poseEngine = new PoseEngine({
           modelComplexity: 1,
@@ -392,9 +403,13 @@
           lineWidth: 3
         });
         
+        return true;
+        
       } catch (e) {
         console.error('Init error:', e);
-        loading.innerHTML = `<p style="color:var(--danger)">Errore: ${e.message}</p>`;
+        loading.classList.add('hidden');
+        alert('Errore caricamento AI: ' + e.message + '\n\nProva a ricaricare la pagina.');
+        return false;
       }
     }
     
@@ -497,7 +512,7 @@
       const btn = document.getElementById('startBtn');
       
       if (isRunning) {
-        poseEngine.stopCamera();
+        poseEngine?.stopCamera();
         isRunning = false;
         btn.textContent = '▶️ Avvia Analisi';
         btn.classList.remove('btn-danger');
@@ -505,23 +520,90 @@
         return;
       }
       
+      btn.disabled = true;
+      btn.textContent = '⏳ Avvio...';
+      
       try {
-        await poseEngine.startCamera(video, { facingMode, width: 1280, height: 720 });
+        // First, get camera permission and start video
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        
+        video.srcObject = stream;
+        await video.play();
+        
+        console.log('Camera started:', video.videoWidth, 'x', video.videoHeight);
+        
+        // Now load pose engine if not ready
+        const ready = await ensurePoseEngine();
+        if (!ready) {
+          stream.getTracks().forEach(t => t.stop());
+          btn.disabled = false;
+          btn.textContent = '▶️ Avvia Analisi';
+          return;
+        }
+        
+        // Start pose detection loop
         isRunning = true;
+        btn.disabled = false;
         btn.textContent = '⏹️ Stop';
         btn.classList.remove('btn-primary');
         btn.classList.add('btn-danger');
+        
+        // Process frames
+        const processFrame = async () => {
+          if (!isRunning) return;
+          
+          if (poseEngine?.isReady && video.readyState >= 2) {
+            try {
+              await poseEngine.processFrame(video);
+            } catch (e) {
+              console.warn('Frame error:', e);
+            }
+          }
+          
+          requestAnimationFrame(processFrame);
+        };
+        
+        processFrame();
+        
       } catch (e) {
-        alert('Errore camera: ' + e.message);
+        console.error('Camera error:', e);
+        btn.disabled = false;
+        btn.textContent = '▶️ Avvia Analisi';
+        
+        if (e.name === 'NotAllowedError') {
+          alert('❌ Permesso camera negato.\n\nAbilita la camera nelle impostazioni del browser.');
+        } else if (e.name === 'NotFoundError') {
+          alert('❌ Nessuna camera trovata.\n\nConnetti una webcam e riprova.');
+        } else {
+          alert('Errore camera: ' + e.message);
+        }
       }
     };
     
     // Flip camera
     window.flipCamera = async () => {
       facingMode = facingMode === 'user' ? 'environment' : 'user';
-      if (isRunning) {
-        poseEngine.stopCamera();
-        await poseEngine.startCamera(video, { facingMode, width: 1280, height: 720 });
+      
+      if (isRunning && video.srcObject) {
+        // Stop current stream
+        video.srcObject.getTracks().forEach(t => t.stop());
+        
+        try {
+          // Start with new facing mode
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+          });
+          video.srcObject = stream;
+          await video.play();
+        } catch (e) {
+          console.error('Flip error:', e);
+          // Revert
+          facingMode = facingMode === 'user' ? 'environment' : 'user';
+        }
       }
     };
     
