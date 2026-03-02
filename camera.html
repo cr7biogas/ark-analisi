@@ -176,17 +176,20 @@
     
     const params = new URLSearchParams(location.search);
     
-    // Session ID: prefer URL param, fallback to localStorage
-    let sessionId = params.get('s');
-    if (sessionId) {
-      // Save sessionId for auto-reconnect
-      localStorage.setItem('arkCamera_sessionId', sessionId);
-    } else {
-      // Try to restore from localStorage
-      sessionId = localStorage.getItem('arkCamera_sessionId');
+    // Session ID: ALWAYS prefer URL param if present
+    const urlSessionId = params.get('s');
+    const savedSessionId = localStorage.getItem('arkCamera_sessionId');
+    
+    let sessionId = urlSessionId || savedSessionId;
+    
+    // Always update localStorage if URL has sessionId
+    if (urlSessionId) {
+      localStorage.setItem('arkCamera_sessionId', urlSessionId);
     }
     
-    console.log('Session ID:', sessionId || 'none');
+    console.log('🔑 Session ID:', sessionId || 'NONE');
+    console.log('   - From URL:', urlSessionId || 'no');
+    console.log('   - From localStorage:', savedSessionId || 'no');
     
     // Check for saved position - auto-start if exists
     const savedPosition = localStorage.getItem('arkCamera_position');
@@ -433,9 +436,16 @@
       
       // Listen for commands
       if (sessionId) {
-        console.log('✅ Listening for commands on:', `sessions/${sessionId}/command`);
-        DB.listen(`sessions/${sessionId}/command`, handleCommand);
-        document.getElementById('connInfo').textContent = `Session: ${sessionId.slice(0, 12)}...`;
+        const cmdPath = `sessions/${sessionId}/command`;
+        console.log('✅ Listening for commands on:', cmdPath);
+        console.log('   Full Firebase path: ark_analisi/' + cmdPath);
+        
+        DB.listen(cmdPath, (data) => {
+          console.log('📨 Command listener fired:', data);
+          handleCommand(data);
+        });
+        
+        document.getElementById('connInfo').textContent = `Session: ${sessionId}`;
       } else {
         console.warn('⚠️ No sessionId - regia commands disabled! Open from regia link.');
         document.getElementById('connInfo').textContent = '⚠️ Nessuna sessione - riapri dal link regia';
@@ -534,8 +544,12 @@
     }
     
     async function handleCommand(cmd) {
-      if (!cmd) return;
-      console.log('📥 Command received:', cmd);
+      console.log('🎯 handleCommand called with:', cmd);
+      if (!cmd) {
+        console.log('   (null/undefined - ignoring)');
+        return;
+      }
+      console.log('📥 Command received:', cmd.action, cmd);
       
       // Update movement if specified
       if (cmd.movement) {
