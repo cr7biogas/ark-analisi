@@ -278,6 +278,7 @@
           <div class="status-list" id="statusList">
             <p style="color:#666;font-size:13px;text-align:center">In attesa...</p>
           </div>
+          <button class="btn btn-secondary" onclick="cleanOfflineCameras()" style="width:100%;margin-top:10px;font-size:12px">🧹 Pulisci Offline</button>
         </div>
       </div>
     </div>
@@ -321,12 +322,23 @@
       window.open(`https://wa.me/?text=${encodeURIComponent(text + cameraUrl)}`, '_blank');
     };
     
-    // Listen for cameras
+    // Listen for cameras (filter stale ones)
+    const STALE_THRESHOLD = 30000; // 30 seconds
+    
     DB.listen('cameras', async (data) => {
       const currentIds = new Set(cameras.keys());
       const newData = data || {};
+      const now = Date.now();
       
       for (const [id, cam] of Object.entries(newData)) {
+        // Skip stale cameras (no heartbeat in 30s)
+        const lastHeartbeat = cam.lastHeartbeat || cam.createdAt || 0;
+        if (now - lastHeartbeat > STALE_THRESHOLD) {
+          // Auto-remove stale camera from Firebase
+          DB.remove(`cameras/${id}`).catch(() => {});
+          continue;
+        }
+        
         if (!cameras.has(id)) {
           cameras.set(id, { info: cam, pc: null, stream: null });
           await createCameraSlot(id, cam);
@@ -346,6 +358,25 @@
       
       updateUI();
     });
+    
+    // Manual cleanup function
+    window.cleanOfflineCameras = async () => {
+      const allCameras = await DB.get('cameras');
+      if (!allCameras) return;
+      
+      const now = Date.now();
+      let removed = 0;
+      
+      for (const [id, cam] of Object.entries(allCameras)) {
+        const lastHeartbeat = cam.lastHeartbeat || cam.createdAt || 0;
+        if (now - lastHeartbeat > STALE_THRESHOLD) {
+          await DB.remove(`cameras/${id}`);
+          removed++;
+        }
+      }
+      
+      alert(`🧹 Rimosse ${removed} camere offline`);
+    };
     
     function updateUI() {
       const count = cameras.size;
