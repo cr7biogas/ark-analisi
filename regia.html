@@ -279,6 +279,7 @@
             <p style="color:#666;font-size:13px;text-align:center">In attesa...</p>
           </div>
           <button class="btn btn-secondary" onclick="cleanOfflineCameras()" style="width:100%;margin-top:10px;font-size:12px">🧹 Pulisci Offline</button>
+          <button class="btn btn-secondary" onclick="newSession()" style="width:100%;margin-top:5px;font-size:12px">🔄 Nuova Sessione</button>
         </div>
       </div>
     </div>
@@ -294,8 +295,13 @@
       { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
     ];
     
-    // State
-    let sessionId = 'ses_' + Date.now().toString(36);
+    // State - persist sessionId across reloads
+    let sessionId = localStorage.getItem('arkAnalisi_sessionId');
+    if (!sessionId) {
+      sessionId = 'ses_' + Date.now().toString(36);
+      localStorage.setItem('arkAnalisi_sessionId', sessionId);
+    }
+    console.log('Session ID:', sessionId);
     const cameras = new Map();
     let isRecording = false;
     let recordingStartTime = null;
@@ -376,6 +382,13 @@
       }
       
       alert(`🧹 Rimosse ${removed} camere offline`);
+    };
+    
+    // New session function
+    window.newSession = () => {
+      if (!confirm('Creare nuova sessione? Le camere dovranno riconnettersi.')) return;
+      localStorage.removeItem('arkAnalisi_sessionId');
+      location.reload();
     };
     
     function updateUI() {
