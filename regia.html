@@ -17,7 +17,6 @@
       .main-layout { grid-template-columns: 1fr; }
     }
     
-    /* Control Panel */
     .control-panel {
       background: linear-gradient(135deg, #1a1a2e, #16213e);
       border-radius: var(--radius);
@@ -39,10 +38,7 @@
     
     .timer-display.recording { color: #e94560; }
     
-    .control-buttons {
-      display: flex;
-      gap: 10px;
-    }
+    .control-buttons { display: flex; gap: 10px; }
     
     .big-btn {
       width: 80px;
@@ -59,7 +55,6 @@
     .big-btn:hover { transform: scale(1.1); }
     .big-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
     
-    /* Camera Grid with Video */
     .camera-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -74,7 +69,9 @@
     }
     
     .camera-slot.connected { border-color: #2ecc71; }
-    .camera-slot.recording { border-color: #e94560; }
+    .camera-slot.recording { border-color: #e94560; animation: pulse-border 1s infinite; }
+    
+    @keyframes pulse-border { 50% { border-color: #c0392b; } }
     
     .camera-slot .slot-header {
       padding: 10px 15px;
@@ -103,36 +100,6 @@
       object-fit: cover;
     }
     
-    .camera-slot canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-    }
-    
-    .camera-slot .score-badge {
-      position: absolute;
-      bottom: 10px;
-      right: 10px;
-      background: rgba(0, 0, 0, 0.85);
-      padding: 10px 20px;
-      border-radius: var(--radius);
-      text-align: center;
-    }
-    
-    .camera-slot .score-badge .score {
-      font-size: 36px;
-      font-weight: 800;
-      color: var(--accent);
-    }
-    
-    .camera-slot .score-badge .label {
-      font-size: 10px;
-      color: #888;
-    }
-    
     .camera-slot .no-video {
       position: absolute;
       inset: 0;
@@ -145,6 +112,27 @@
     
     .camera-slot .no-video .icon { font-size: 48px; margin-bottom: 10px; }
     
+    .camera-slot .stats-badge {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 8px 15px;
+      border-radius: var(--radius);
+      text-align: center;
+    }
+    
+    .camera-slot .stats-badge .score {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--accent);
+    }
+    
+    .camera-slot .stats-badge .label {
+      font-size: 10px;
+      color: #888;
+    }
+    
     .empty-cameras {
       text-align: center;
       padding: 60px 40px;
@@ -155,7 +143,6 @@
     
     .empty-cameras .icon { font-size: 60px; margin-bottom: 15px; }
     
-    /* Sidebar */
     .sidebar {
       background: var(--bg-secondary);
       border-radius: var(--radius);
@@ -188,11 +175,9 @@
       margin-bottom: 15px;
     }
     
-    .qr-box img { width: 150px; height: 150px; }
+    .qr-box canvas { width: 150px; height: 150px; }
     
-    .status-list {
-      margin-top: 15px;
-    }
+    .status-list { margin-top: 15px; }
     
     .status-item {
       display: flex;
@@ -216,6 +201,8 @@
     
     @keyframes pulse { 50% { opacity: 0.5; } }
   </style>
+  <!-- QR Code library (no COEP issues) -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
   <div class="header">
@@ -229,23 +216,27 @@
   <div class="container">
     <div class="main-layout">
       <div class="main-content">
-        <!-- Control Panel -->
         <div class="control-panel">
           <div>
             <select id="movementSelect" style="padding:10px 15px;border-radius:8px;background:var(--bg-card);color:#fff;border:1px solid #444;">
-              <option value="">-- Movimento --</option>
+              <option value="squat">🏋️ Squat</option>
+              <option value="deadlift">💪 Deadlift</option>
+              <option value="press">🔥 Press</option>
+              <option value="pullup">🔥 Pull-up</option>
+              <option value="clean">🏋️ Clean</option>
+              <option value="snatch">🏋️ Snatch</option>
+              <option value="plank">🧘 Plank</option>
             </select>
           </div>
           
           <div class="timer-display" id="timer">00:00</div>
           
           <div class="control-buttons">
-            <button class="big-btn start" id="startBtn" onclick="startRecording()" disabled title="Start">▶️</button>
-            <button class="big-btn stop" id="stopBtn" onclick="stopRecording()" disabled title="Stop">⏹</button>
+            <button class="big-btn start" id="startBtn" onclick="startRecording()" disabled>▶️</button>
+            <button class="big-btn stop" id="stopBtn" onclick="stopRecording()" disabled>⏹</button>
           </div>
         </div>
         
-        <!-- Camera Grid -->
         <div id="cameraContainer">
           <div class="empty-cameras" id="emptyState">
             <div class="icon">📱</div>
@@ -261,7 +252,7 @@
         <div>
           <h3>📱 Connetti Camera</h3>
           <div class="qr-box">
-            <img id="qrImage" src="" alt="QR Code">
+            <canvas id="qrCanvas"></canvas>
           </div>
           <div class="link-box">
             <input type="text" id="cameraLink" readonly>
@@ -282,9 +273,6 @@
 
   <script type="module">
     import { DB } from './firebase-config.js';
-    import { PoseEngine, SkeletonRenderer } from './lib/pose-engine.js';
-    import { getAllMovements } from './lib/movement-db.js';
-    import { ScoreCalculator, getGrade } from './lib/scoring.js';
     
     const ICE_SERVERS = [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -301,22 +289,22 @@
     let timerInterval = null;
     let globalMovement = 'squat';
     
-    // Setup movements
-    const movements = getAllMovements();
+    // Movement select
     const movementSelect = document.getElementById('movementSelect');
-    movementSelect.innerHTML = '<option value="">-- Movimento --</option>' +
-      movements.map(m => `<option value="${m.id}">${m.icon} ${m.name}</option>`).join('');
-    movementSelect.value = 'squat';
-    globalMovement = 'squat';
-    
     movementSelect.addEventListener('change', () => {
       globalMovement = movementSelect.value;
     });
     
-    // Camera link & QR
+    // Camera link & QR (generated locally, no external API)
     const cameraUrl = `${location.origin}/camera.html?s=${sessionId}`;
     document.getElementById('cameraLink').value = cameraUrl;
-    document.getElementById('qrImage').src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(cameraUrl)}`;
+    
+    // Generate QR locally
+    QRCode.toCanvas(document.getElementById('qrCanvas'), cameraUrl, {
+      width: 150,
+      margin: 1,
+      color: { dark: '#000', light: '#fff' }
+    });
     
     window.copyLink = () => {
       navigator.clipboard.writeText(cameraUrl);
@@ -333,29 +321,17 @@
       const currentIds = new Set(cameras.keys());
       const newData = data || {};
       
-      // Add/update cameras
       for (const [id, cam] of Object.entries(newData)) {
         if (!cameras.has(id)) {
-          // New camera
-          cameras.set(id, {
-            info: cam,
-            pc: null,
-            stream: null,
-            poseEngine: null,
-            skeletonRenderer: null,
-            scoreCalculator: null,
-            analysisLoop: null
-          });
+          cameras.set(id, { info: cam, pc: null, stream: null });
           await createCameraSlot(id, cam);
           await connectToCamera(id);
         } else {
-          // Update info
           cameras.get(id).info = cam;
           updateCameraStatus(id, cam);
         }
       }
       
-      // Remove disconnected cameras
       for (const id of currentIds) {
         if (!newData[id]) {
           removeCameraSlot(id);
@@ -373,7 +349,6 @@
       document.getElementById('cameraGrid').style.display = count > 0 ? 'grid' : 'none';
       document.getElementById('startBtn').disabled = count === 0;
       
-      // Update status list
       const statusList = document.getElementById('statusList');
       if (count === 0) {
         statusList.innerHTML = '<p style="color:#666;font-size:13px;text-align:center">In attesa...</p>';
@@ -408,13 +383,12 @@
         </div>
         <div class="video-area">
           <video id="video-${camId}" autoplay playsinline muted></video>
-          <canvas id="canvas-${camId}"></canvas>
           <div class="no-video" id="novideo-${camId}">
             <div class="icon">📡</div>
             <span>Connessione...</span>
           </div>
-          <div class="score-badge" id="score-${camId}" style="display:none">
-            <div class="score">--</div>
+          <div class="stats-badge" id="stats-${camId}" style="display:none">
+            <div class="score" id="score-${camId}">--</div>
             <div class="label">SCORE</div>
           </div>
         </div>
@@ -425,17 +399,15 @@
     
     function removeCameraSlot(camId) {
       const cam = cameras.get(camId);
-      if (cam) {
-        cancelAnimationFrame(cam.analysisLoop);
-        cam.pc?.close();
-      }
-      
+      if (cam?.pc) cam.pc.close();
       document.getElementById(`slot-${camId}`)?.remove();
     }
     
     function updateCameraStatus(camId, info) {
       const dot = document.getElementById(`dot-${camId}`);
       const slot = document.getElementById(`slot-${camId}`);
+      const scoreEl = document.getElementById(`score-${camId}`);
+      const statsEl = document.getElementById(`stats-${camId}`);
       
       if (dot) {
         dot.className = 'status-dot ' + (info.status === 'recording' ? 'recording' : 'ready');
@@ -444,6 +416,12 @@
         slot.classList.toggle('recording', info.status === 'recording');
         slot.classList.toggle('connected', info.status === 'ready' || info.status === 'recording');
       }
+      
+      // Show score from camera (camera does the analysis)
+      if (info.stats?.averageScore !== undefined && statsEl) {
+        statsEl.style.display = 'block';
+        scoreEl.textContent = Math.round(info.stats.averageScore);
+      }
     }
     
     async function connectToCamera(camId) {
@@ -451,10 +429,8 @@
       if (!cam) return;
       
       const video = document.getElementById(`video-${camId}`);
-      const canvas = document.getElementById(`canvas-${camId}`);
       const noVideo = document.getElementById(`novideo-${camId}`);
       
-      // Clean old connection
       if (cam.pc) {
         cam.pc.close();
         cam.pc = null;
@@ -465,7 +441,6 @@
       cam.unsubscribers = [];
       cam.addedCandidates = new Set();
       
-      // Clear old signaling
       try {
         await DB.remove(`cameras/${camId}/regiaOffer`);
         await DB.remove(`cameras/${camId}/regiaCandidates`);
@@ -473,11 +448,10 @@
       
       await new Promise(r => setTimeout(r, 100));
       
-      // Create peer connection
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
       cam.pc = pc;
       
-      pc.ontrack = async (e) => {
+      pc.ontrack = (e) => {
         console.log(`[${camId}] Video received!`);
         cam.stream = e.streams[0];
         video.srcObject = e.streams[0];
@@ -485,9 +459,6 @@
         
         document.getElementById(`slot-${camId}`)?.classList.add('connected');
         document.getElementById(`dot-${camId}`).className = 'status-dot ready';
-        
-        // Start pose analysis
-        await startAnalysis(camId);
       };
       
       pc.onicecandidate = async (e) => {
@@ -504,7 +475,6 @@
         }
       };
       
-      // Create offer
       pc.addTransceiver('video', { direction: 'recvonly' });
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -512,7 +482,6 @@
       
       console.log(`[${camId}] Offer sent`);
       
-      // Listen for answer
       const unsubAnswer = DB.listen(`cameras/${camId}/regiaAnswer`, async (answer) => {
         if (!answer || !pc || pc.signalingState === 'closed' || pc.signalingState === 'stable') return;
         
@@ -520,7 +489,6 @@
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
           console.log(`[${camId}] Answer received`);
           
-          // Listen for camera candidates
           const unsubCands = DB.listen(`cameras/${camId}/regiaCameraCandidates`, async (cands) => {
             if (!cands || !pc || pc.connectionState === 'closed') return;
             for (const [id, cand] of Object.entries(cands)) {
@@ -539,94 +507,6 @@
       cam.unsubscribers.push(unsubAnswer);
     }
     
-    async function startAnalysis(camId) {
-      const cam = cameras.get(camId);
-      if (!cam || !cam.stream) return;
-      
-      const video = document.getElementById(`video-${camId}`);
-      const canvas = document.getElementById(`canvas-${camId}`);
-      const scoreEl = document.getElementById(`score-${camId}`);
-      
-      // Wait for video metadata
-      if (video.videoWidth === 0) {
-        await new Promise(r => {
-          video.onloadedmetadata = r;
-          setTimeout(r, 2000);
-        });
-      }
-      
-      // Setup canvas
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      
-      // Initialize pose engine
-      cam.poseEngine = new PoseEngine({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-        onResults: (results) => handlePoseResults(camId, results),
-        onReady: () => console.log(`[${camId}] PoseEngine ready`)
-      });
-      
-      await cam.poseEngine.init();
-      
-      // Setup renderer
-      cam.skeletonRenderer = new SkeletonRenderer(canvas, {
-        jointRadius: 6,
-        lineWidth: 3
-      });
-      
-      // Setup score calculator
-      cam.scoreCalculator = new ScoreCalculator(globalMovement || 'squat');
-      
-      // Start analysis loop
-      const analyze = async () => {
-        if (!cam.poseEngine?.isReady || !video.readyState >= 2) {
-          cam.analysisLoop = requestAnimationFrame(analyze);
-          return;
-        }
-        
-        try {
-          await cam.poseEngine.processFrame(video);
-        } catch(e) {}
-        
-        cam.analysisLoop = requestAnimationFrame(analyze);
-      };
-      
-      analyze();
-      scoreEl.style.display = 'block';
-    }
-    
-    function handlePoseResults(camId, results) {
-      const cam = cameras.get(camId);
-      if (!cam) return;
-      
-      const canvas = document.getElementById(`canvas-${camId}`);
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      if (!results.detected) return;
-      
-      // Draw skeleton
-      cam.skeletonRenderer?.draw(results.landmarks, {
-        angles: results.angles
-      });
-      
-      // Calculate score
-      if (cam.scoreCalculator) {
-        const scoreResult = cam.scoreCalculator.process(results);
-        
-        const scoreEl = document.getElementById(`score-${camId}`);
-        if (scoreEl) {
-          const scoreDiv = scoreEl.querySelector('.score');
-          scoreDiv.textContent = scoreResult.score;
-          const gradeInfo = getGrade(scoreResult.score);
-          scoreDiv.style.color = gradeInfo.color;
-        }
-      }
-    }
-    
     // Recording controls
     window.startRecording = async () => {
       if (cameras.size === 0) return;
@@ -634,14 +514,12 @@
       isRecording = true;
       recordingStartTime = Date.now();
       
-      // Send command to all cameras
       await DB.set(`sessions/${sessionId}/command`, {
         action: 'start',
         movement: globalMovement,
         timestamp: Date.now()
       });
       
-      // Update UI
       document.getElementById('startBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;
       document.getElementById('timer').classList.add('recording');
@@ -652,9 +530,6 @@
         const sec = (elapsed % 60).toString().padStart(2, '0');
         document.getElementById('timer').textContent = `${min}:${sec}`;
       }, 100);
-      
-      // Reset score calculators
-      cameras.forEach(cam => cam.scoreCalculator?.reset());
     };
     
     window.stopRecording = async () => {
@@ -663,34 +538,16 @@
       isRecording = false;
       clearInterval(timerInterval);
       
-      // Send stop command
       await DB.set(`sessions/${sessionId}/command`, {
         action: 'stop',
         timestamp: Date.now()
       });
       
-      // Update UI
       document.getElementById('startBtn').disabled = false;
       document.getElementById('stopBtn').disabled = true;
       document.getElementById('timer').classList.remove('recording');
       
-      // Collect results
-      setTimeout(async () => {
-        const results = [];
-        cameras.forEach((cam, id) => {
-          const stats = cam.scoreCalculator?.getStats();
-          if (stats) {
-            results.push({
-              camera: cam.info?.name || id,
-              position: cam.info?.position,
-              ...stats
-            });
-          }
-        });
-        
-        console.log('Session results:', results);
-        
-        // Could send to bot here or create report
+      setTimeout(() => {
         alert(`✅ Registrazione completata!\n\nCamere: ${cameras.size}\nDurata: ${document.getElementById('timer').textContent}`);
       }, 1000);
     };
