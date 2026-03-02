@@ -251,20 +251,42 @@
         
         loadingText.textContent = 'Caricamento AI posturale...';
         
-        // Init pose engine
-        poseEngine = new PoseEngine({
-          modelComplexity: 1,
-          smoothLandmarks: true,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5,
-          onResults: handlePoseResults,
-          onReady: () => {
-            console.log('PoseEngine ready');
-            finishSetup();
+        // Try to init pose engine with timeout fallback
+        let poseReady = false;
+        const poseTimeout = setTimeout(() => {
+          if (!poseReady) {
+            console.warn('MediaPipe timeout - using video-only mode');
+            loadingText.textContent = 'AI non disponibile - modalità video';
+            finishSetup(false); // false = no pose
           }
-        });
+        }, 10000); // 10 second timeout
         
-        await poseEngine.init();
+        try {
+          poseEngine = new PoseEngine({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5,
+            onResults: handlePoseResults,
+            onReady: () => {
+              if (!poseReady) {
+                poseReady = true;
+                clearTimeout(poseTimeout);
+                console.log('PoseEngine ready');
+                finishSetup(true); // true = with pose
+              }
+            }
+          });
+          
+          await poseEngine.init();
+        } catch (poseErr) {
+          console.warn('MediaPipe failed:', poseErr);
+          if (!poseReady) {
+            poseReady = true;
+            clearTimeout(poseTimeout);
+            finishSetup(false);
+          }
+        }
         
       } catch (e) {
         alert('Errore: ' + e.message);
@@ -272,11 +294,18 @@
       }
     };
     
-    function finishSetup() {
+    let usePoseAnalysis = false;
+    
+    function finishSetup(withPose = true) {
+      usePoseAnalysis = withPose;
+      
       document.getElementById('setup').classList.add('hidden');
       document.getElementById('nameLabel').textContent = `${athleteName} - ${position}`;
       document.getElementById('recBtn').style.display = 'block';
-      document.getElementById('scoreBadge').style.display = 'block';
+      
+      if (withPose) {
+        document.getElementById('scoreBadge').style.display = 'block';
+      }
       
       // Wake lock
       if ('wakeLock' in navigator) {
@@ -286,17 +315,22 @@
       camId = 'cam_' + Math.random().toString(36).substr(2, 8);
       document.getElementById('camId').textContent = camId;
       
-      // Setup skeleton renderer
-      skeletonRenderer = new SkeletonRenderer(outputCanvas, {
-        jointRadius: 6,
-        lineWidth: 3
-      });
-      
-      // Setup score calculator
-      scoreCalculator = new ScoreCalculator(movement);
-      
-      // Start analysis loop
-      startAnalysisLoop();
+      if (withPose) {
+        // Setup skeleton renderer
+        skeletonRenderer = new SkeletonRenderer(outputCanvas, {
+          jointRadius: 6,
+          lineWidth: 3
+        });
+        
+        // Setup score calculator
+        scoreCalculator = new ScoreCalculator(movement);
+        
+        // Start analysis loop
+        startAnalysisLoop();
+      } else {
+        // Video-only mode - just draw video to canvas
+        startVideoOnlyLoop();
+      }
       
       // Create canvas stream for WebRTC (includes skeleton!)
       canvasStream = outputCanvas.captureStream(30);
@@ -325,6 +359,18 @@
       };
       
       analyze();
+    }
+    
+    function startVideoOnlyLoop() {
+      // Simple loop - just draw video to canvas (no pose analysis)
+      const drawFrame = () => {
+        if (video.readyState >= 2) {
+          outputCtx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
+        }
+        analysisLoop = requestAnimationFrame(drawFrame);
+      };
+      
+      drawFrame();
     }
     
     function handlePoseResults(results) {
