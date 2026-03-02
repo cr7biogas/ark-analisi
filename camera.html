@@ -10,13 +10,37 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, sans-serif; background: #000; color: #fff; height: 100vh; overflow: hidden; }
     .container { height: 100%; display: flex; flex-direction: column; padding: 0; max-width: 100%; }
-    video { flex: 1; width: 100%; object-fit: cover; }
+    
+    .video-wrapper {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+    }
+    
+    video { 
+      position: absolute;
+      width: 100%; 
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    canvas {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    #outputCanvas {
+      z-index: 2;
+    }
     
     .overlay {
       position: absolute; top: 0; left: 0; right: 0;
       padding: 15px;
       background: linear-gradient(rgba(0,0,0,0.8), transparent);
       display: flex; justify-content: space-between; align-items: center;
+      z-index: 10;
     }
     .status { display: flex; align-items: center; gap: 8px; font-size: 13px; }
     .dot { width: 10px; height: 10px; border-radius: 50%; }
@@ -26,6 +50,19 @@
     .dot.recording { background: #e94560; animation: blink 0.5s infinite; }
     @keyframes blink { 50% { opacity: 0.3; } }
     .cam-name { background: #e94560; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+    
+    .score-badge {
+      position: absolute;
+      top: 70px;
+      right: 15px;
+      background: rgba(0,0,0,0.8);
+      padding: 10px 20px;
+      border-radius: 15px;
+      text-align: center;
+      z-index: 10;
+    }
+    .score-badge .score { font-size: 36px; font-weight: 800; color: #00d4ff; }
+    .score-badge .label { font-size: 10px; color: #888; }
     
     .rec-indicator {
       position: absolute; top: 70px; left: 50%; transform: translateX(-50%);
@@ -39,6 +76,7 @@
       position: absolute; bottom: 0; left: 0; right: 0;
       background: linear-gradient(transparent, rgba(0,0,0,0.95));
       padding: 40px 20px 20px;
+      z-index: 10;
     }
     .info { text-align: center; margin-bottom: 20px; }
     .info .label { font-size: 11px; color: #888; margin-bottom: 5px; }
@@ -71,41 +109,57 @@
     }
     .setup input:focus, .setup select:focus { outline: none; border-color: #e94560; }
     .setup .btn { width: 100%; max-width: 280px; }
+    .setup .loading { margin-top: 20px; color: #888; }
   </style>
 </head>
 <body>
   <div class="setup" id="setup">
     <div class="logo">📷</div>
     <h1>ARK Camera</h1>
-    <p>Connetti questo telefono per registrare</p>
+    <p>Camera con analisi posturale in tempo reale</p>
     <input type="text" id="athleteName" placeholder="👤 Nome Atleta">
     <select id="position">
       <option value="frontale">📍 Frontale</option>
       <option value="laterale">📍 Laterale</option>
       <option value="posteriore">📍 Posteriore</option>
     </select>
+    <select id="movement">
+      <option value="squat">🏋️ Squat</option>
+      <option value="deadlift">💪 Deadlift</option>
+      <option value="press">🔥 Press</option>
+      <option value="pullup">🔥 Pull-up</option>
+    </select>
     <button class="btn btn-primary" onclick="start()">📹 Avvia Camera</button>
+    <p class="loading" id="loadingText" style="display:none">Caricamento AI...</p>
   </div>
   
   <div class="container">
-    <video id="video" autoplay playsinline muted></video>
-    
-    <div class="overlay">
-      <div class="status">
-        <div class="dot offline" id="dot"></div>
-        <span id="statusText">Offline</span>
+    <div class="video-wrapper">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="outputCanvas"></canvas>
+      
+      <div class="overlay">
+        <div class="status">
+          <div class="dot offline" id="dot"></div>
+          <span id="statusText">Offline</span>
+        </div>
+        <div class="cam-name" id="nameLabel">Camera</div>
       </div>
-      <div class="cam-name" id="nameLabel">Camera</div>
+      
+      <div class="score-badge" id="scoreBadge" style="display:none">
+        <div class="score" id="liveScore">--</div>
+        <div class="label">SCORE</div>
+      </div>
+      
+      <div class="rec-indicator" id="recIndicator">⏺ REC</div>
     </div>
-    
-    <div class="rec-indicator" id="recIndicator">⏺ REC</div>
     
     <div class="bottom-panel">
       <div class="timer" id="timer">00:00</div>
       <div class="info">
         <div class="label">CAMERA ID</div>
         <div class="value" id="camId">---</div>
-        <div class="sub" id="connInfo">In attesa di connessione...</div>
+        <div class="sub" id="connInfo">In attesa...</div>
       </div>
       <div class="controls">
         <button class="btn btn-secondary" onclick="switchCam()">🔄 Flip</button>
@@ -117,27 +171,41 @@
 
   <script type="module">
     import { DB } from './firebase-config.js';
+    import { PoseEngine, SkeletonRenderer } from './lib/pose-engine.js';
+    import { ScoreCalculator, getGrade } from './lib/scoring.js';
     
     const ICE_SERVERS = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' }
     ];
     
-    // Get session from URL
     const params = new URLSearchParams(location.search);
     const sessionId = params.get('s');
     
     let camId = null;
     let athleteName = '';
     let position = '';
+    let movement = 'squat';
     let stream = null;
     let facingMode = 'environment';
     let heartbeatInterval = null;
     
-    // WebRTC to regia
+    // Pose analysis
+    let poseEngine = null;
+    let skeletonRenderer = null;
+    let scoreCalculator = null;
+    let analysisLoop = null;
+    
+    // Canvas for output (video + skeleton)
+    const video = document.getElementById('video');
+    const outputCanvas = document.getElementById('outputCanvas');
+    const outputCtx = outputCanvas.getContext('2d');
+    
+    // WebRTC
     let regiaPC = null;
     let regiaUnsubscribers = [];
     let regiaCandidates = new Set();
+    let canvasStream = null;
     
     // Recording
     let mediaRecorder = null;
@@ -162,6 +230,11 @@
     window.start = async () => {
       athleteName = document.getElementById('athleteName').value.trim() || 'Atleta';
       position = document.getElementById('position').value;
+      movement = document.getElementById('movement').value;
+      
+      const loadingText = document.getElementById('loadingText');
+      loadingText.style.display = 'block';
+      loadingText.textContent = 'Avvio camera...';
       
       try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -169,50 +242,147 @@
           audio: true
         });
         
-        document.getElementById('video').srcObject = stream;
-        document.getElementById('setup').classList.add('hidden');
-        document.getElementById('nameLabel').textContent = `${athleteName} - ${position}`;
-        document.getElementById('recBtn').style.display = 'block';
+        video.srcObject = stream;
+        await video.play();
         
-        // Wake lock
-        if ('wakeLock' in navigator) {
-          try { await navigator.wakeLock.request('screen'); } catch(e) {}
-        }
+        // Setup canvas
+        outputCanvas.width = video.videoWidth || 1280;
+        outputCanvas.height = video.videoHeight || 720;
         
-        camId = 'cam_' + Math.random().toString(36).substr(2, 8);
-        document.getElementById('camId').textContent = camId;
+        loadingText.textContent = 'Caricamento AI posturale...';
         
-        // Register camera
-        await DB.set(`cameras/${camId}`, {
-          name: athleteName,
-          position,
-          status: 'ready',
-          sessionId: sessionId || null,
-          createdAt: Date.now(),
-          lastHeartbeat: Date.now()
+        // Init pose engine
+        poseEngine = new PoseEngine({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+          onResults: handlePoseResults,
+          onReady: () => {
+            console.log('PoseEngine ready');
+            finishSetup();
+          }
         });
         
-        setStatus('connecting', 'In attesa...');
-        
-        // Listen for regia connection
-        listenForRegia();
-        
-        // Listen for commands
-        if (sessionId) {
-          DB.listen(`sessions/${sessionId}/command`, handleCommand);
-        }
-        
-        // Heartbeat
-        heartbeatInterval = setInterval(async () => {
-          await DB.update(`cameras/${camId}`, { lastHeartbeat: Date.now() });
-        }, 5000);
-        
-        console.log('Camera started:', camId);
+        await poseEngine.init();
         
       } catch (e) {
-        alert('Errore camera: ' + e.message);
+        alert('Errore: ' + e.message);
+        loadingText.textContent = 'Errore: ' + e.message;
       }
     };
+    
+    function finishSetup() {
+      document.getElementById('setup').classList.add('hidden');
+      document.getElementById('nameLabel').textContent = `${athleteName} - ${position}`;
+      document.getElementById('recBtn').style.display = 'block';
+      document.getElementById('scoreBadge').style.display = 'block';
+      
+      // Wake lock
+      if ('wakeLock' in navigator) {
+        navigator.wakeLock.request('screen').catch(() => {});
+      }
+      
+      camId = 'cam_' + Math.random().toString(36).substr(2, 8);
+      document.getElementById('camId').textContent = camId;
+      
+      // Setup skeleton renderer
+      skeletonRenderer = new SkeletonRenderer(outputCanvas, {
+        jointRadius: 6,
+        lineWidth: 3
+      });
+      
+      // Setup score calculator
+      scoreCalculator = new ScoreCalculator(movement);
+      
+      // Start analysis loop
+      startAnalysisLoop();
+      
+      // Create canvas stream for WebRTC (includes skeleton!)
+      canvasStream = outputCanvas.captureStream(30);
+      // Add audio from original stream
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) canvasStream.addTrack(audioTrack);
+      
+      // Register camera
+      registerCamera();
+      
+      setStatus('connecting', 'Pronto');
+    }
+    
+    function startAnalysisLoop() {
+      const analyze = async () => {
+        if (!poseEngine?.isReady || video.readyState < 2) {
+          analysisLoop = requestAnimationFrame(analyze);
+          return;
+        }
+        
+        try {
+          await poseEngine.processFrame(video);
+        } catch (e) {}
+        
+        analysisLoop = requestAnimationFrame(analyze);
+      };
+      
+      analyze();
+    }
+    
+    function handlePoseResults(results) {
+      // Draw video frame
+      outputCtx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
+      
+      if (!results.detected) return;
+      
+      // Draw skeleton on top
+      skeletonRenderer.draw(results.landmarks, {
+        angles: results.angles,
+        centerOfMass: results.centerOfMass
+      });
+      
+      // Calculate score
+      if (scoreCalculator) {
+        const scoreResult = scoreCalculator.process(results);
+        
+        const scoreEl = document.getElementById('liveScore');
+        scoreEl.textContent = scoreResult.score;
+        const gradeInfo = getGrade(scoreResult.score);
+        scoreEl.style.color = gradeInfo.color;
+      }
+    }
+    
+    async function registerCamera() {
+      await DB.set(`cameras/${camId}`, {
+        name: athleteName,
+        position,
+        movement,
+        status: 'ready',
+        sessionId: sessionId || null,
+        createdAt: Date.now(),
+        lastHeartbeat: Date.now()
+      });
+      
+      // Listen for regia
+      listenForRegia();
+      
+      // Listen for commands
+      if (sessionId) {
+        DB.listen(`sessions/${sessionId}/command`, handleCommand);
+      }
+      
+      // Heartbeat
+      heartbeatInterval = setInterval(async () => {
+        const stats = scoreCalculator?.getStats();
+        await DB.update(`cameras/${camId}`, { 
+          lastHeartbeat: Date.now(),
+          stats: stats ? {
+            averageScore: stats.averageScore,
+            totalReps: stats.totalReps
+          } : null
+        });
+      }, 5000);
+      
+      console.log('Camera registered:', camId);
+    }
     
     function listenForRegia() {
       DB.listen(`cameras/${camId}/regiaOffer`, async (offer) => {
@@ -220,7 +390,6 @@
         
         console.log('Regia offer received');
         
-        // Cleanup old connection
         if (regiaPC) {
           regiaPC.close();
           regiaUnsubscribers.forEach(fn => fn?.());
@@ -228,15 +397,13 @@
         }
         regiaCandidates = new Set();
         
-        // Create peer connection
         regiaPC = new RTCPeerConnection({ iceServers: ICE_SERVERS });
         
-        // Add video stream
-        stream.getTracks().forEach(track => {
-          regiaPC.addTrack(track, stream);
+        // Add canvas stream (video with skeleton!) + audio
+        canvasStream.getTracks().forEach(track => {
+          regiaPC.addTrack(track, canvasStream);
         });
         
-        // ICE candidates
         regiaPC.onicecandidate = async (e) => {
           if (e.candidate && !e.candidate.candidate.includes('.local')) {
             const id = `${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
@@ -247,24 +414,19 @@
         regiaPC.onconnectionstatechange = () => {
           console.log('Regia connection:', regiaPC.connectionState);
           if (regiaPC.connectionState === 'connected') {
-            setStatus('online', 'Connesso alla regia');
-            document.getElementById('connInfo').textContent = 'Streaming alla regia';
-          } else if (regiaPC.connectionState === 'failed') {
-            setStatus('offline', 'Disconnesso');
+            setStatus('online', 'Streaming');
+            document.getElementById('connInfo').textContent = 'Connesso alla regia';
           }
         };
         
-        // Set offer
         await regiaPC.setRemoteDescription(new RTCSessionDescription(offer));
         
-        // Create answer
         const answer = await regiaPC.createAnswer();
         await regiaPC.setLocalDescription(answer);
         await DB.set(`cameras/${camId}/regiaAnswer`, { type: answer.type, sdp: answer.sdp });
         
-        console.log('Answer sent to regia');
+        console.log('Answer sent');
         
-        // Listen for regia candidates
         const unsub = DB.listen(`cameras/${camId}/regiaCandidates`, async (cands) => {
           if (!cands || !regiaPC) return;
           for (const [id, cand] of Object.entries(cands)) {
@@ -291,11 +453,8 @@
     }
     
     window.toggleRecording = () => {
-      if (isRecording) {
-        stopRecording();
-      } else {
-        startRecording();
-      }
+      if (isRecording) stopRecording();
+      else startRecording();
     };
     
     async function startRecording() {
@@ -303,14 +462,15 @@
       
       isRecording = true;
       recordedChunks = [];
+      scoreCalculator?.reset();
       
-      // Setup MediaRecorder
+      // Record canvas stream (with skeleton!)
       const options = { mimeType: 'video/webm;codecs=vp9,opus' };
       if (!MediaRecorder.isTypeSupported(options.mimeType)) {
         options.mimeType = 'video/webm';
       }
       
-      mediaRecorder = new MediaRecorder(stream, options);
+      mediaRecorder = new MediaRecorder(canvasStream, options);
       
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) recordedChunks.push(e.data);
@@ -320,13 +480,11 @@
       
       mediaRecorder.start(1000);
       
-      // Update UI
       document.getElementById('recIndicator').classList.add('active');
       document.getElementById('timer').classList.add('recording');
       document.getElementById('recBtn').textContent = '⏹ STOP';
       document.getElementById('recBtn').classList.add('btn-danger');
-      document.getElementById('recBtn').classList.remove('btn-secondary');
-      setStatus('recording', 'Registrazione...');
+      setStatus('recording', 'REC');
       
       recordingStartTime = Date.now();
       timerInterval = setInterval(updateTimer, 100);
@@ -342,43 +500,46 @@
       
       mediaRecorder.stop();
       
-      // Update UI
       document.getElementById('recIndicator').classList.remove('active');
       document.getElementById('timer').classList.remove('recording');
       document.getElementById('recBtn').textContent = '⏺ REC';
       document.getElementById('recBtn').classList.remove('btn-danger');
-      document.getElementById('recBtn').classList.add('btn-secondary');
-      setStatus('connecting', 'Caricamento...');
+      setStatus('connecting', 'Salvataggio...');
       
       await DB.update(`cameras/${camId}`, { status: 'uploading' });
     }
     
     async function uploadRecording() {
       const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const stats = scoreCalculator?.getStats() || {};
       const videoId = `vid_${Date.now()}`;
       
       const recordingData = {
         videoId,
         athleteName,
         position,
+        movement,
         duration: document.getElementById('timer').textContent,
         size: blob.size,
         timestamp: Date.now(),
+        stats: {
+          averageScore: stats.averageScore || 0,
+          bestScore: stats.bestScore || 0,
+          totalReps: stats.totalReps || 0
+        },
         status: 'ready'
       };
       
-      // Save metadata to Firebase
       if (sessionId) {
         await DB.set(`recordings/${sessionId}/${camId}`, recordingData);
       } else {
         await DB.set(`recordings/manual/${videoId}`, recordingData);
       }
       
-      // Update camera status
-      await DB.update(`cameras/${camId}`, { status: 'uploaded', videoId });
+      await DB.update(`cameras/${camId}`, { status: 'uploaded', videoId, stats: recordingData.stats });
       
-      setStatus('online', 'Caricato!');
-      alert(`✅ Video salvato!\n\nDurata: ${document.getElementById('timer').textContent}`);
+      setStatus('online', 'Salvato!');
+      alert(`✅ Video salvato!\n\nScore medio: ${stats.averageScore || '--'}\nReps: ${stats.totalReps || 0}`);
       
       document.getElementById('timer').textContent = '00:00';
       recordingStartTime = null;
@@ -386,28 +547,36 @@
     
     window.switchCam = async () => {
       if (isRecording) {
-        alert('Non puoi cambiare camera durante la registrazione');
+        alert('Non puoi cambiare durante la registrazione');
         return;
       }
       
       facingMode = facingMode === 'environment' ? 'user' : 'environment';
       
-      const oldStream = stream;
+      stream.getTracks().forEach(t => t.stop());
+      
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: true
       });
       
-      document.getElementById('video').srcObject = stream;
+      video.srcObject = stream;
+      await video.play();
       
-      // Replace track in peer connection
+      outputCanvas.width = video.videoWidth;
+      outputCanvas.height = video.videoHeight;
+      
+      // Update canvas stream
+      const newVideoTrack = outputCanvas.captureStream(30).getVideoTracks()[0];
+      const audioTrack = stream.getAudioTracks()[0];
+      
+      // Replace tracks in WebRTC
       if (regiaPC) {
-        const newTrack = stream.getVideoTracks()[0];
-        const sender = regiaPC.getSenders().find(s => s.track?.kind === 'video');
-        if (sender) sender.replaceTrack(newTrack);
+        const videoSender = regiaPC.getSenders().find(s => s.track?.kind === 'video');
+        const audioSender = regiaPC.getSenders().find(s => s.track?.kind === 'audio');
+        if (videoSender) videoSender.replaceTrack(newVideoTrack);
+        if (audioSender && audioTrack) audioSender.replaceTrack(audioTrack);
       }
-      
-      oldStream.getTracks().forEach(t => t.stop());
     };
     
     window.stop = async () => {
@@ -416,8 +585,8 @@
         await stopRecording();
       }
       
+      cancelAnimationFrame(analysisLoop);
       clearInterval(heartbeatInterval);
-      clearInterval(timerInterval);
       regiaUnsubscribers.forEach(fn => fn?.());
       regiaPC?.close();
       stream?.getTracks().forEach(t => t.stop());
