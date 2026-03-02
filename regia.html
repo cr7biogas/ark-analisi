@@ -514,20 +514,35 @@
       pc.ontrack = (e) => {
         console.log(`[${camId}] Video received!`, e.streams[0]?.getTracks());
         cam.stream = e.streams[0];
-        video.srcObject = e.streams[0];
         
-        // Force play
-        video.play().then(() => {
-          console.log(`[${camId}] Video playing`);
-          noVideo.style.display = 'none';
-          document.getElementById(`slot-${camId}`)?.classList.add('connected');
-          document.getElementById(`dot-${camId}`).className = 'status-dot ready';
-        }).catch(err => {
-          console.warn(`[${camId}] Video play failed:`, err);
-          // Try muted autoplay
-          video.muted = true;
-          video.play().catch(() => {});
-        });
+        // Get elements dynamically (slot might have been recreated)
+        const videoEl = document.getElementById(`video-${camId}`);
+        const noVideoEl = document.getElementById(`novideo-${camId}`);
+        
+        if (!videoEl) {
+          console.warn(`[${camId}] Video element not found!`);
+          return;
+        }
+        
+        videoEl.srcObject = e.streams[0];
+        
+        // Force play with retry
+        const tryPlay = () => {
+          videoEl.play().then(() => {
+            console.log(`[${camId}] Video playing`);
+            if (noVideoEl) noVideoEl.style.display = 'none';
+            document.getElementById(`slot-${camId}`)?.classList.add('connected');
+            document.getElementById(`dot-${camId}`).className = 'status-dot ready';
+          }).catch(err => {
+            console.warn(`[${camId}] Video play failed:`, err);
+            // Retry with muted after small delay
+            videoEl.muted = true;
+            setTimeout(() => videoEl.play().catch(() => {}), 100);
+          });
+        };
+        
+        // Small delay to ensure element is in DOM
+        setTimeout(tryPlay, 50);
       };
       
       pc.onicecandidate = async (e) => {
@@ -546,6 +561,11 @@
       
       pc.oniceconnectionstatechange = () => {
         console.log(`[${camId}] ICE: ${pc.iceConnectionState}`);
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          const noVideoEl = document.getElementById(`novideo-${camId}`);
+          if (noVideoEl) noVideoEl.style.display = 'none';
+          document.getElementById(`slot-${camId}`)?.classList.add('connected');
+        }
       };
       
       pc.onicegatheringstatechange = () => {
