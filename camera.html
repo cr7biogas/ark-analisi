@@ -512,34 +512,129 @@
     async function uploadRecording() {
       const blob = new Blob(recordedChunks, { type: 'video/webm' });
       const stats = scoreCalculator?.getStats() || {};
-      const videoId = `vid_${Date.now()}`;
+      const analysisId = `ana_${Date.now()}`;
+      const duration = document.getElementById('timer').textContent;
       
-      const recordingData = {
-        videoId,
-        athleteName,
-        position,
-        movement,
-        duration: document.getElementById('timer').textContent,
-        size: blob.size,
-        timestamp: Date.now(),
-        stats: {
-          averageScore: stats.averageScore || 0,
-          bestScore: stats.bestScore || 0,
-          totalReps: stats.totalReps || 0
-        },
-        status: 'ready'
-      };
+      setStatus('connecting', 'Upload video...');
       
-      if (sessionId) {
-        await DB.set(`recordings/${sessionId}/${camId}`, recordingData);
-      } else {
-        await DB.set(`recordings/manual/${videoId}`, recordingData);
+      try {
+        // Convert blob to base64
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        
+        // Upload to R2
+        setStatus('connecting', 'Caricamento...');
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            video: base64,
+            filename: `${analysisId}_${athleteName.replace(/\s+/g, '_')}`
+          })
+        });
+        
+        let videoUrl = null;
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          videoUrl = uploadData.url;
+          console.log('Video uploaded:', videoUrl);
+        } else {
+          console.warn('Upload failed, saving metadata only');
+        }
+        
+        // Prepare full recording data
+        const recordingData = {
+          analysisId,
+          videoUrl,
+          athleteName,
+          position,
+          movement,
+          duration,
+          size: blob.size,
+          timestamp: Date.now(),
+          stats: {
+            averageScore: stats.averageScore || 0,
+            bestScore: stats.bestScore || 0,
+            worstScore: stats.worstScore || 0,
+            totalReps: stats.totalReps || 0,
+            topFaults: stats.topFaults || []
+          },
+          status: videoUrl ? 'pending_analysis' : 'upload_failed'
+        };
+        
+        // Save to Firebase
+        await DB.set(`recordings/${analysisId}`, recordingData);
+        
+        // Create pending report entry
+        await DB.set(`reports/${analysisId}`, {
+          status: 'pending',
+          athleteName,
+          movement,
+          duration,
+          videoUrl,
+          appScore: stats.averageScore || 0,
+          totalReps: stats.totalReps || 0,
+          createdAt: Date.now()
+        });
+        
+        // Notify Claude for analysis (if video uploaded)
+        if (videoUrl) {
+          setStatus('connecting', 'Invio per analisi...');
+          
+          // Ask for athlete phone (optional)
+          const sendDirect = confirm('Vuoi inviare il report direttamente all\'atleta?\n\nPremi OK per inserire il numero, Annulla per inviare a te.');
+          let athletePhone = null;
+          if (sendDirect) {
+            athletePhone = prompt('Inserisci numero WhatsApp atleta (es: +39123456789):');
+          }
+          
+          try {
+            await fetch('/api/notify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                analysisId,
+                videoUrl,
+                athleteName,
+                movement,
+                position,
+                duration,
+                appStats: recordingData.stats,
+                athletePhone
+              })
+            });
+          } catch (e) {
+            console.warn('Notify failed:', e);
+          }
+        }
+        
+        // Update camera status
+        await DB.update(`cameras/${camId}`, { 
+          status: 'uploaded', 
+          analysisId,
+          videoUrl,
+          stats: recordingData.stats 
+        });
+        
+        setStatus('online', 'Completato!');
+        
+        const reportUrl = `${location.origin}/report.html?id=${analysisId}`;
+        alert(`✅ Video caricato!\n\nScore medio: ${stats.averageScore || '--'}\nReps: ${stats.totalReps || 0}\n\n📋 Report:\n${reportUrl}`);
+        
+        // Copy report URL
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(reportUrl);
+        }
+        
+      } catch (e) {
+        console.error('Upload error:', e);
+        setStatus('offline', 'Errore upload');
+        alert('❌ Errore upload: ' + e.message);
       }
-      
-      await DB.update(`cameras/${camId}`, { status: 'uploaded', videoId, stats: recordingData.stats });
-      
-      setStatus('online', 'Salvato!');
-      alert(`✅ Video salvato!\n\nScore medio: ${stats.averageScore || '--'}\nReps: ${stats.totalReps || 0}`);
       
       document.getElementById('timer').textContent = '00:00';
       recordingStartTime = null;
