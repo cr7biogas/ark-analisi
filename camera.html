@@ -418,6 +418,20 @@
         console.log('No sessionId - commands disabled');
       }
       
+      // Listen for global refresh signal from regia
+      let initialRefresh = null;
+      DB.listen('globalRefresh', (data) => {
+        if (!data) return;
+        if (initialRefresh === null) {
+          initialRefresh = data.timestamp;
+          return; // Skip first read
+        }
+        if (data.timestamp > initialRefresh) {
+          console.log('Refresh signal received - reloading camera');
+          location.reload();
+        }
+      });
+      
       // Heartbeat
       heartbeatInterval = setInterval(async () => {
         const stats = scoreCalculator?.getStats();

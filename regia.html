@@ -385,8 +385,12 @@
     };
     
     // New session function
-    window.newSession = () => {
-      if (!confirm('Creare nuova sessione? Le camere dovranno riconnettersi.')) return;
+    window.newSession = async () => {
+      if (!confirm('Creare nuova sessione? Le camere si ricaricheranno.')) return;
+      
+      // Signal all cameras to reload
+      await DB.set('globalRefresh', { timestamp: Date.now() });
+      
       localStorage.removeItem('arkAnalisi_sessionId');
       location.reload();
     };
@@ -536,9 +540,10 @@
       pc.addTransceiver('video', { direction: 'recvonly' });
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await DB.set(`cameras/${camId}/regiaOffer`, { type: offer.type, sdp: offer.sdp });
+      // Add timestamp to force Firebase to notify even if SDP is same
+      await DB.set(`cameras/${camId}/regiaOffer`, { type: offer.type, sdp: offer.sdp, ts: Date.now() });
       
-      console.log(`[${camId}] Offer sent`);
+      console.log(`[${camId}] Offer sent (ts: ${Date.now()})`);
       
       const unsubAnswer = DB.listen(`cameras/${camId}/regiaAnswer`, async (answer) => {
         if (!answer || !pc || pc.signalingState === 'closed' || pc.signalingState === 'stable') return;
