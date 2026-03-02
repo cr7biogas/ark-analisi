@@ -362,6 +362,10 @@
       
       // Create canvas stream for WebRTC (includes skeleton!)
       canvasStream = outputCanvas.captureStream(30);
+      console.log('[WebRTC] Canvas stream created:', {
+        tracks: canvasStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState })),
+        canvasSize: `${outputCanvas.width}x${outputCanvas.height}`
+      });
       // Add audio from original stream
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) canvasStream.addTrack(audioTrack);
@@ -391,9 +395,21 @@
     
     function startVideoOnlyLoop() {
       // Simple loop - just draw video to canvas (no pose analysis)
+      let frameCount = 0;
       const drawFrame = () => {
         if (video.readyState >= 2) {
           outputCtx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
+          frameCount++;
+          if (frameCount % 60 === 1) {
+            console.log(`[Canvas] Drawing frame ${frameCount}, video: ${video.videoWidth}x${video.videoHeight}, canvas: ${outputCanvas.width}x${outputCanvas.height}`);
+          }
+        } else {
+          // Draw colored rectangle to show canvas is working
+          outputCtx.fillStyle = '#ff0000';
+          outputCtx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+          outputCtx.fillStyle = '#fff';
+          outputCtx.font = '48px Arial';
+          outputCtx.fillText('Waiting for video...', 50, 100);
         }
         analysisLoop = requestAnimationFrame(drawFrame);
       };
