@@ -1,9 +1,9 @@
 /**
- * Notify API - Sends analysis request to Claude via Telegram
+ * Notify API - Sends analysis request to Claude via Bridge (as Eugenio)
  */
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_NOTIFY_CHAT_ID || '1274524612'; // Eugenio's chat
+const BRIDGE_URL = process.env.BRIDGE_URL || 'http://187.77.96.192:3462/send';
+const BRIDGE_TARGET = process.env.BRIDGE_TARGET || '@AnaliticExercise_bot'; // ANALYZER agent
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -22,57 +22,58 @@ export default async function handler(req, res) {
       position,
       duration,
       appStats,
-      athletePhone // Optional: send report directly to athlete
+      reps,
+      load,
+      cameraView
     } = req.body;
 
     if (!analysisId || !videoUrl) {
       return res.status(400).json({ error: 'Missing analysisId or videoUrl' });
     }
 
-    // Build message for Claude
-    const message = `🎬 **NUOVA ANALISI VIDEO**
+    // Build message for Claude (plain text, no markdown)
+    const message = `🎬 ANALIZZA VIDEO ARK
 
-📋 **ID:** \`${analysisId}\`
-👤 **Atleta:** ${athleteName || 'Anonimo'}
-🏋️ **Movimento:** ${movement || 'Non specificato'}
-📍 **Posizione camera:** ${position || 'Non specificata'}
-⏱️ **Durata:** ${duration || '??'}
+ID: ${analysisId}
+Atleta: ${athleteName || 'Anonimo'}
+Movimento: ${movement || 'squat'}
+Camera: ${position || 'frontale'}
+Vista: ${cameraView || position || 'frontale'}
+Durata: ${duration || '??'}
+Reps: ${reps || '1'}
+Carico: ${load || 'BW'}
 
-📊 **Dati dall'app:**
-- Score medio: ${appStats?.averageScore || '--'}
-- Score migliore: ${appStats?.bestScore || '--'}
-- Ripetizioni: ${appStats?.totalReps || 0}
-- Errori rilevati: ${appStats?.topFaults?.map(f => f.name).join(', ') || 'nessuno'}
+Score app: ${appStats?.averageScore || '--'}/100
+Errori: ${appStats?.topFaults?.map(f => f.name).join(', ') || 'nessuno'}
 
-🎥 **Video:** ${videoUrl}
+Video: ${videoUrl}
 
-${athletePhone ? `📱 **Invia report a:** ${athletePhone}` : '📱 **Invia report a:** Eugenio (inoltra manualmente)'}
+ISTRUZIONI:
+1. Estrai 35-40 frame dal video
+2. Trova bottom position (frame 15-25)
+3. Analizza: profondità, knee cave, asimmetria, stabilità
+4. Genera report con scoring 0-100
+5. Confronta con score app e valida errori`;
 
----
-⚡ **AZIONE RICHIESTA:**
-1. Analizza il video (scaricalo o usa frame)
-2. Confronta con i dati app
-3. Crea report in Firebase: \`ark_analisi/reports/${analysisId}\`
-4. Invia URL report: https://ark-analisi.vercel.app/report.html?id=${analysisId}`;
+    // Send via Bridge (arrives as Eugenio's message)
+    const bridgeRes = await fetch(BRIDGE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target: BRIDGE_TARGET,
+        message: message
+      })
+    });
 
-    // Send to Telegram
-    if (TELEGRAM_BOT_TOKEN) {
-      const telegramUrl = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-      
-      await fetch(telegramUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_CHAT_ID,
-          text: message,
-          parse_mode: 'Markdown'
-        })
-      });
+    const bridgeData = await bridgeRes.json();
+    
+    if (!bridgeData.ok) {
+      throw new Error(bridgeData.error || 'Bridge failed');
     }
 
     return res.status(200).json({ 
       success: true, 
-      message: 'Notification sent',
+      message: 'Sent via bridge',
       analysisId
     });
 

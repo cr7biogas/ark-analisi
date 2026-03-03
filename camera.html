@@ -22,17 +22,60 @@
       width: 100%; 
       height: 100%;
       object-fit: cover;
+      opacity: 0; /* Hidden behind canvas */
     }
     
     canvas {
       position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: contain;
+      background: #000;
     }
     
     #outputCanvas {
-      z-index: 2;
+      z-index: 10; /* Above everything */
+    }
+    
+    .position-guide {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 60%;
+      height: 85%;
+      border: 3px dashed rgba(46, 204, 113, 0.9);
+      border-radius: 20px;
+      z-index: 5;
+      pointer-events: none;
+      /* No shadow on skeleton mode - already black bg */
+    }
+    
+    .position-guide::before {
+      content: '👤 Posizionati qui';
+      position: absolute;
+      top: -35px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(46, 204, 113, 0.9);
+      color: white;
+      padding: 6px 15px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    
+    .position-guide.recording {
+      border-color: rgba(233, 69, 96, 0.9);
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.1);
+    }
+    
+    .position-guide.recording::before {
+      content: '🔴 REGISTRAZIONE';
+      background: rgba(233, 69, 96, 0.9);
     }
     
     .overlay {
@@ -113,25 +156,18 @@
   </style>
 </head>
 <body>
-  <div class="setup" id="setup">
+  <div class="setup hidden" id="setup">
     <div class="logo">📷</div>
     <h1>ARK Camera</h1>
-    <p>Seleziona la posizione di questa camera</p>
-    <select id="position">
-      <option value="frontale">📍 Frontale</option>
-      <option value="laterale-sx">📍 Laterale SX</option>
-      <option value="laterale-dx">📍 Laterale DX</option>
-      <option value="posteriore">📍 Posteriore</option>
-    </select>
-    <button class="btn btn-primary" onclick="start()">📹 Avvia Camera</button>
-    <p style="margin-top:20px;font-size:12px;color:#666">La posizione verrà salvata per questo dispositivo</p>
-    <p class="loading" id="loadingText" style="display:none">Caricamento AI...</p>
+    <p>Connessione in corso...</p>
+    <p class="loading" id="loadingText">Avvio camera...</p>
   </div>
   
   <div class="container">
     <div class="video-wrapper">
       <video id="video" autoplay playsinline muted></video>
       <canvas id="outputCanvas"></canvas>
+      <div class="position-guide" id="positionGuide"></div>
       
       <div class="overlay">
         <div class="status">
@@ -180,28 +216,12 @@
     
     const params = new URLSearchParams(location.search);
     
-    // Session ID: ALWAYS prefer URL param if present
-    const urlSessionId = params.get('s');
-    const savedSessionId = localStorage.getItem('arkCamera_sessionId');
+    // Session ID: FIXED - always use "ark_main" for simplicity
+    const sessionId = 'ark_main';
+    console.log('🔑 Session ID (fixed):', sessionId);
     
-    let sessionId = urlSessionId || savedSessionId;
-    
-    // Always update localStorage if URL has sessionId
-    if (urlSessionId) {
-      localStorage.setItem('arkCamera_sessionId', urlSessionId);
-    }
-    
-    console.log('🔑 Session ID:', sessionId || 'NONE');
-    console.log('   - From URL:', urlSessionId || 'no');
-    console.log('   - From localStorage:', savedSessionId || 'no');
-    
-    // Check for saved position - auto-start if exists
-    const savedPosition = localStorage.getItem('arkCamera_position');
-    if (savedPosition) {
-      document.getElementById('position').value = savedPosition;
-      // Auto-start after short delay to let page render
-      setTimeout(() => start(true), 500);
-    }
+    // Auto-start immediately - position set from regia
+    setTimeout(() => start(true), 500);
     
     let camId = null;
     let athleteName = '';
@@ -226,7 +246,8 @@
     let regiaPC = null;
     let regiaUnsubscribers = [];
     let regiaCandidates = new Set();
-    let canvasStream = null;
+    let webrtcStream = null;  // For regia preview (direct video)
+    let recordingStream = null; // For recording (canvas with skeleton)
     
     // Recording
     let mediaRecorder = null;
@@ -249,12 +270,8 @@
     }
     
     window.start = async (autoStart = false) => {
-      // Get position from form or localStorage
-      const posSelect = document.getElementById('position');
-      position = posSelect.value;
-      
-      // Save position to localStorage for this device
-      localStorage.setItem('arkCamera_position', position);
+      // Position will be set from regia, use saved or default
+      position = localStorage.getItem('arkCamera_position') || 'camera';
       
       // Movement will come from regia command, default to squat
       movement = 'squat';
@@ -266,9 +283,15 @@
       
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+          video: { 
+            facingMode, 
+            width: { ideal: 1920, min: 1280 }, 
+            height: { ideal: 1080, min: 720 }, 
+            frameRate: { ideal: 30, min: 24 }
+          },
           audio: true
         });
+        console.log('📹 Camera quality:', stream.getVideoTracks()[0].getSettings());
         
         video.srcObject = stream;
         await video.play();
@@ -285,9 +308,9 @@
           if (!poseReady) {
             console.warn('MediaPipe timeout - using video-only mode');
             loadingText.textContent = 'AI non disponibile - modalità video';
-            finishSetup(false); // false = no pose
+            finishSetup(false);
           }
-        }, 10000); // 10 second timeout
+        }, 10000);
         
         try {
           poseEngine = new PoseEngine({
@@ -301,7 +324,7 @@
                 poseReady = true;
                 clearTimeout(poseTimeout);
                 console.log('PoseEngine ready');
-                finishSetup(true); // true = with pose
+                finishSetup(true);
               }
             }
           });
@@ -360,15 +383,14 @@
         startVideoOnlyLoop();
       }
       
-      // Create canvas stream for WebRTC (includes skeleton!)
-      canvasStream = outputCanvas.captureStream(30);
-      console.log('[WebRTC] Canvas stream created:', {
-        tracks: canvasStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState })),
-        canvasSize: `${outputCanvas.width}x${outputCanvas.height}`
-      });
-      // Add audio from original stream
+      // Canvas stream for both WebRTC and recording (skeleton only, black bg)
+      recordingStream = outputCanvas.captureStream(30);
       const audioTrack = stream.getAudioTracks()[0];
-      if (audioTrack) canvasStream.addTrack(audioTrack);
+      if (audioTrack) recordingStream.addTrack(audioTrack);
+      webrtcStream = recordingStream; // Same stream for both
+      console.log('[Stream] Canvas stream (skeleton only):', {
+        tracks: recordingStream.getTracks().map(t => ({ kind: t.kind, enabled: t.enabled, readyState: t.readyState }))
+      });
       
       // Register camera
       registerCamera();
@@ -377,20 +399,20 @@
     }
     
     function startAnalysisLoop() {
-      const analyze = async () => {
-        if (!poseEngine?.isReady || video.readyState < 2) {
-          analysisLoop = requestAnimationFrame(analyze);
-          return;
+      const drawFrame = () => {
+        // Draw video frame
+        if (video.readyState >= 2) {
+          outputCtx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
         }
         
-        try {
-          await poseEngine.processFrame(video);
-        } catch (e) {}
+        // Process pose (skeleton draws on top via handlePoseResults)
+        if (poseEngine?.isReady && video.readyState >= 2) {
+          poseEngine.processFrame(video).catch(() => {});
+        }
         
-        analysisLoop = requestAnimationFrame(analyze);
+        analysisLoop = requestAnimationFrame(drawFrame);
       };
-      
-      analyze();
+      drawFrame();
     }
     
     function startVideoOnlyLoop() {
@@ -418,9 +440,7 @@
     }
     
     function handlePoseResults(results) {
-      // Draw video frame
-      outputCtx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
-      
+      // Video frame already drawn in analysis loop - just add skeleton
       if (!results.detected) return;
       
       // Draw skeleton on top
@@ -454,23 +474,16 @@
       // Listen for regia
       listenForRegia();
       
-      // Listen for commands
-      if (sessionId) {
-        const cmdPath = `sessions/${sessionId}/command`;
-        console.log('✅ Listening for commands on:', cmdPath);
-        console.log('   Full Firebase path: ark_analisi/' + cmdPath);
-        
-        DB.listen(cmdPath, (data) => {
-          console.log('📨 Command listener fired:', data);
-          handleCommand(data);
-        });
-        
-        document.getElementById('connInfo').textContent = `Session: ${sessionId}`;
-      } else {
-        console.warn('⚠️ No sessionId - regia commands disabled! Open from regia link.');
-        document.getElementById('connInfo').textContent = '⚠️ Nessuna sessione - riapri dal link regia';
-        document.getElementById('connInfo').style.color = '#e94560';
-      }
+      // Listen for commands (sessionId is always 'ark_main')
+      const cmdPath = `sessions/${sessionId}/command`;
+      console.log('✅ Listening for commands on:', cmdPath);
+      
+      DB.listen(cmdPath, (data) => {
+        console.log('📨 Command listener fired:', data);
+        handleCommand(data);
+      });
+      
+      document.getElementById('connInfo').textContent = `Connesso`;
       
       // Listen for regia reload signal - auto reconnect
       let lastRegiaTs = null;
@@ -503,6 +516,17 @@
         });
       }, 5000);
       
+      // Listen for position updates from regia
+      DB.listen(`cameras/${camId}/position`, (newPosition) => {
+        if (newPosition && newPosition !== position) {
+          position = newPosition;
+          athleteName = `Camera ${position}`;
+          localStorage.setItem('arkCamera_position', position);
+          document.getElementById('nameLabel').textContent = `${athleteName} - ${position}`;
+          console.log('📍 Position updated from regia:', position);
+        }
+      });
+      
       console.log('Camera registered:', camId);
     }
     
@@ -521,9 +545,9 @@
         
         regiaPC = new RTCPeerConnection({ iceServers: ICE_SERVERS });
         
-        // Add canvas stream (video with skeleton!) + audio
-        canvasStream.getTracks().forEach(track => {
-          regiaPC.addTrack(track, canvasStream);
+        // Add video stream to regia (direct, no flickering)
+        webrtcStream.getTracks().forEach(track => {
+          regiaPC.addTrack(track, webrtcStream);
         });
         
         regiaPC.onicecandidate = async (e) => {
@@ -563,12 +587,29 @@
       });
     }
     
+    let autoStopTimeout = null;
+    let lastCommandTimestamp = 0;
+    const cameraStartTime = Date.now();
+    
     async function handleCommand(cmd) {
       console.log('🎯 handleCommand called with:', cmd);
       if (!cmd) {
         console.log('   (null/undefined - ignoring)');
         return;
       }
+      
+      // IMPORTANT: Ignore old commands (before camera started or already processed)
+      const cmdTime = cmd.timestamp || 0;
+      if (cmdTime <= lastCommandTimestamp) {
+        console.log('   ⏭️ Skipping old/duplicate command:', cmdTime, '<=', lastCommandTimestamp);
+        return;
+      }
+      if (cmdTime < cameraStartTime - 5000) {
+        console.log('   ⏭️ Skipping stale command from before camera started:', cmdTime, '<', cameraStartTime);
+        return;
+      }
+      
+      lastCommandTimestamp = cmdTime;
       console.log('📥 Command received:', cmd.action, cmd);
       
       // Update movement if specified
@@ -582,9 +623,23 @@
       if (cmd.action === 'start' && !isRecording) {
         console.log('▶️ Starting recording from regia command');
         await startRecording();
+        
+        // Auto-stop after duration (if specified)
+        if (cmd.duration) {
+          console.log(`⏱️ Auto-stop scheduled in ${cmd.duration}ms`);
+          if (autoStopTimeout) clearTimeout(autoStopTimeout);
+          autoStopTimeout = setTimeout(async () => {
+            console.log('⏱️ Auto-stop triggered');
+            await stopRecording();
+          }, cmd.duration);
+        }
       } else if (cmd.action === 'stop' && isRecording) {
         console.log('⏹ Stopping recording from regia command');
+        if (autoStopTimeout) clearTimeout(autoStopTimeout);
         await stopRecording();
+      } else if (cmd.action === 'flip') {
+        console.log('🔄 Flip camera from regia command');
+        await switchCam();
       }
     }
     
@@ -600,13 +655,17 @@
       recordedChunks = [];
       scoreCalculator?.reset();
       
-      // Record canvas stream (with skeleton!)
-      const options = { mimeType: 'video/webm;codecs=vp9,opus' };
+      // Record canvas stream (with skeleton!) - HIGH QUALITY
+      const options = { 
+        mimeType: 'video/webm;codecs=vp9,opus',
+        videoBitsPerSecond: 8000000  // 8 Mbps for high quality
+      };
       if (!MediaRecorder.isTypeSupported(options.mimeType)) {
         options.mimeType = 'video/webm';
       }
+      console.log('🎬 Recording quality: 8 Mbps, codec:', options.mimeType);
       
-      mediaRecorder = new MediaRecorder(canvasStream, options);
+      mediaRecorder = new MediaRecorder(recordingStream, options);
       
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) recordedChunks.push(e.data);
@@ -620,6 +679,7 @@
       document.getElementById('timer').classList.add('recording');
       document.getElementById('recBtn').textContent = '⏹ STOP';
       document.getElementById('recBtn').classList.add('btn-danger');
+      document.getElementById('positionGuide').classList.add('recording');
       setStatus('recording', 'REC');
       
       recordingStartTime = Date.now();
@@ -640,6 +700,7 @@
       document.getElementById('timer').classList.remove('recording');
       document.getElementById('recBtn').textContent = '⏺ REC';
       document.getElementById('recBtn').classList.remove('btn-danger');
+      document.getElementById('positionGuide').classList.remove('recording');
       setStatus('connecting', 'Salvataggio...');
       
       await DB.update(`cameras/${camId}`, { status: 'uploading' });
@@ -717,19 +778,12 @@
           createdAt: Date.now()
         });
         
-        // Notify Claude for analysis (if video uploaded)
+        // Notify Claude for analysis (if video uploaded) - automatic, no prompts
         if (videoUrl) {
           setStatus('connecting', 'Invio per analisi...');
           
-          // Ask for athlete phone (optional)
-          const sendDirect = confirm('Vuoi inviare il report direttamente all\'atleta?\n\nPremi OK per inserire il numero, Annulla per inviare a te.');
-          let athletePhone = null;
-          if (sendDirect) {
-            athletePhone = prompt('Inserisci numero WhatsApp atleta (es: +39123456789):');
-          }
-          
           try {
-            await fetch('/api/notify', {
+            const notifyRes = await fetch('/api/notify', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -740,9 +794,12 @@
                 position,
                 duration,
                 appStats: recordingData.stats,
-                athletePhone
+                reps: recordingData.stats?.totalReps || 1,
+                load: 'BW', // TODO: add load input
+                cameraView: position
               })
             });
+            console.log('Notify sent:', await notifyRes.json());
           } catch (e) {
             console.warn('Notify failed:', e);
           }
@@ -756,15 +813,8 @@
           stats: recordingData.stats 
         });
         
-        setStatus('online', 'Completato!');
-        
-        const reportUrl = `${location.origin}/report.html?id=${analysisId}`;
-        alert(`✅ Video caricato!\n\nScore medio: ${stats.averageScore || '--'}\nReps: ${stats.totalReps || 0}\n\n📋 Report:\n${reportUrl}`);
-        
-        // Copy report URL
-        if (navigator.clipboard) {
-          navigator.clipboard.writeText(reportUrl);
-        }
+        setStatus('online', '✅ Inviato!');
+        console.log('✅ Recording complete, notified via Telegram');
         
       } catch (e) {
         console.error('Upload error:', e);
@@ -787,7 +837,12 @@
       stream.getTracks().forEach(t => t.stop());
       
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: { 
+          facingMode, 
+          width: { ideal: 1920, min: 1280 }, 
+          height: { ideal: 1080, min: 720 },
+          frameRate: { ideal: 30, min: 24 }
+        },
         audio: true
       });
       
@@ -797,12 +852,15 @@
       outputCanvas.width = video.videoWidth;
       outputCanvas.height = video.videoHeight;
       
-      // Update canvas stream
-      const newVideoTrack = outputCanvas.captureStream(30).getVideoTracks()[0];
+      // Update streams after camera flip - use canvas (skeleton only)
+      recordingStream = outputCanvas.captureStream(30);
       const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) recordingStream.addTrack(audioTrack);
+      webrtcStream = recordingStream;
       
-      // Replace tracks in WebRTC
+      // Replace tracks in WebRTC with canvas stream (skeleton only)
       if (regiaPC) {
+        const newVideoTrack = recordingStream.getVideoTracks()[0];
         const videoSender = regiaPC.getSenders().find(s => s.track?.kind === 'video');
         const audioSender = regiaPC.getSenders().find(s => s.track?.kind === 'audio');
         if (videoSender) videoSender.replaceTrack(newVideoTrack);

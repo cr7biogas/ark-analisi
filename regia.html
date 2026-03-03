@@ -244,7 +244,16 @@
           
           <div class="control-buttons">
             <button class="big-btn start" id="startBtn" onclick="startRecording()" disabled>▶️</button>
-            <button class="big-btn stop" id="stopBtn" onclick="stopRecording()" disabled>⏹</button>
+            <button class="big-btn" style="background:linear-gradient(135deg,#3498db,#2980b9);width:60px;height:60px;font-size:24px" onclick="flipCameras()">🔄</button>
+          </div>
+          <div style="font-size:12px;color:#888;margin-top:5px">
+            <select id="durationSelect" style="padding:5px;border-radius:5px;background:#333;color:#fff;border:none;">
+              <option value="5000">5 secondi</option>
+              <option value="10000" selected>10 secondi</option>
+              <option value="15000">15 secondi</option>
+              <option value="20000">20 secondi</option>
+              <option value="30000">30 secondi</option>
+            </select>
           </div>
         </div>
         
@@ -297,13 +306,9 @@
       { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
     ];
     
-    // State - persist sessionId across reloads
-    let sessionId = localStorage.getItem('arkAnalisi_sessionId');
-    if (!sessionId) {
-      sessionId = 'ses_' + Date.now().toString(36);
-      localStorage.setItem('arkAnalisi_sessionId', sessionId);
-    }
-    console.log('Session ID:', sessionId);
+    // Session ID: FIXED - always "ark_main"
+    const sessionId = 'ark_main';
+    console.log('Session ID (fixed):', sessionId);
     const cameras = new Map();
     let isRecording = false;
     let recordingStartTime = null;
@@ -316,8 +321,8 @@
       globalMovement = movementSelect.value;
     });
     
-    // Camera link
-    const cameraUrl = `${location.origin}/camera.html?s=${sessionId}`;
+    // Camera link - FIXED, no session param needed
+    const cameraUrl = `${location.origin}/camera.html`;
     document.getElementById('cameraLink').value = cameraUrl;
     
     // Signal cameras to reconnect when regia loads
@@ -437,9 +442,14 @@
         <div class="slot-header">
           <span class="slot-title">
             <span class="status-dot connecting" id="dot-${camId}"></span>
-            ${info.name || 'Camera'}
+            <span id="name-${camId}">${info.name || 'Camera'}</span>
           </span>
-          <span style="color:#888;font-size:12px">${info.position || ''}</span>
+          <select id="pos-${camId}" onchange="setPosition('${camId}', this.value)" style="padding:4px 8px;border-radius:5px;background:#333;color:#fff;border:1px solid #555;font-size:12px;">
+            <option value="frontale" ${info.position === 'frontale' ? 'selected' : ''}>📍 Frontale</option>
+            <option value="laterale-sx" ${info.position === 'laterale-sx' ? 'selected' : ''}>📍 Laterale SX</option>
+            <option value="laterale-dx" ${info.position === 'laterale-dx' ? 'selected' : ''}>📍 Laterale DX</option>
+            <option value="posteriore" ${info.position === 'posteriore' ? 'selected' : ''}>📍 Posteriore</option>
+          </select>
         </div>
         <div class="video-area">
           <video id="video-${camId}" autoplay playsinline muted></video>
@@ -456,6 +466,13 @@
       
       grid.appendChild(slot);
     }
+    
+    // Set camera position from regia
+    window.setPosition = async (camId, position) => {
+      await DB.update(`cameras/${camId}`, { position, name: `Camera ${position}` });
+      document.getElementById(`name-${camId}`).textContent = `Camera ${position}`;
+      console.log(`Set ${camId} position to ${position}`);
+    };
     
     function removeCameraSlot(camId) {
       const cam = cameras.get(camId);
@@ -624,50 +641,54 @@
       cam.unsubscribers.push(unsubAnswer);
     }
     
+    // Flip all cameras
+    window.flipCameras = async () => {
+      console.log('Sending FLIP command to all cameras');
+      await DB.set(`sessions/${sessionId}/command`, {
+        action: 'flip',
+        timestamp: Date.now()
+      });
+    };
+    
     // Recording controls
     window.startRecording = async () => {
       if (cameras.size === 0) return;
       
+      const duration = parseInt(document.getElementById('durationSelect').value);
+      const durationSec = duration / 1000;
+      
       isRecording = true;
       recordingStartTime = Date.now();
       
-      console.log('Sending START command to:', `sessions/${sessionId}/command`);
+      console.log('Sending START command to:', `sessions/${sessionId}/command`, 'duration:', duration);
       await DB.set(`sessions/${sessionId}/command`, {
         action: 'start',
         movement: globalMovement,
+        duration: duration, // Auto-stop after this many ms
         timestamp: Date.now()
       });
       console.log('START command sent');
       
       document.getElementById('startBtn').disabled = true;
-      document.getElementById('stopBtn').disabled = false;
       document.getElementById('timer').classList.add('recording');
       
+      // Countdown timer
+      let remaining = durationSec;
+      document.getElementById('timer').textContent = `00:${remaining.toString().padStart(2, '0')}`;
+      
       timerInterval = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
-        const min = Math.floor(elapsed / 60).toString().padStart(2, '0');
-        const sec = (elapsed % 60).toString().padStart(2, '0');
-        document.getElementById('timer').textContent = `${min}:${sec}`;
-      }, 100);
-    };
-    
-    window.stopRecording = async () => {
-      if (!isRecording) return;
-      
-      isRecording = false;
-      clearInterval(timerInterval);
-      
-      await DB.set(`sessions/${sessionId}/command`, {
-        action: 'stop',
-        timestamp: Date.now()
-      });
-      
-      document.getElementById('startBtn').disabled = false;
-      document.getElementById('stopBtn').disabled = true;
-      document.getElementById('timer').classList.remove('recording');
-      
-      setTimeout(() => {
-        alert(`✅ Registrazione completata!\n\nCamere: ${cameras.size}\nDurata: ${document.getElementById('timer').textContent}`);
+        remaining--;
+        if (remaining <= 0) {
+          clearInterval(timerInterval);
+          document.getElementById('timer').textContent = '00:00';
+          document.getElementById('timer').classList.remove('recording');
+          document.getElementById('startBtn').disabled = false;
+          isRecording = false;
+        } else {
+          const min = Math.floor(remaining / 60).toString().padStart(2, '0');
+          const sec = (remaining % 60).toString().padStart(2, '0');
+          document.getElementById('timer').textContent = `${min}:${sec}`;
+        }
       }, 1000);
     };
   </script>
