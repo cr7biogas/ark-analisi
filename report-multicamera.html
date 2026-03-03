@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>📊 Report Multi-Camera - ARK Analisi</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    .camera-tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 30px;
+      border-bottom: 2px solid #333;
+    }
+    .camera-tab {
+      padding: 15px 30px;
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.3s;
+    }
+    .camera-tab:hover {
+      color: #fff;
+    }
+    .camera-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .camera-panel {
+      display: none;
+    }
+    .camera-panel.active {
+      display: block;
+    }
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .comparison-card {
+      background: var(--bg-secondary);
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+    }
+    .comparison-card .camera-name {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 10px;
+    }
+    .comparison-card .value {
+      font-size: 48px;
+      font-weight: 900;
+      color: var(--accent);
+    }
+    .comparison-card .label {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+    }
+    .sync-timeline {
+      background: var(--bg-secondary);
+      padding: 30px;
+      border-radius: 12px;
+      margin-bottom: 30px;
+    }
+    .timeline-row {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 15px;
+      margin-bottom: 15px;
+      align-items: center;
+    }
+    .timeline-label {
+      font-size: 14px;
+      color: #888;
+      text-align: right;
+    }
+    .timeline-bar {
+      height: 40px;
+      background: linear-gradient(90deg, #3498db, #e74c3c);
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    .timeline-marker {
+      position: absolute;
+      width: 3px;
+      height: 100%;
+      background: #fff;
+      top: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="top-bar">
+      <a href="analisi.html" class="back-btn">← Indietro</a>
+      <h1>📊 Report Multi-Camera</h1>
+      <div></div>
+    </div>
+    
+    <div id="content">
+      <div class="pending">
+        <div class="icon">🔄</div>
+        <h2>Caricamento...</h2>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getDatabase, ref, onValue } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+    
+    const firebaseConfig = {
+      apiKey: "AIzaSyDLaL6vGhK0bL0H4nKZYj1bvvRZnqQRxWo",
+      authDomain: "copilota-6d94a.firebaseapp.com",
+      databaseURL: "https://copilota-6d94a-default-rtdb.firebaseio.com",
+      projectId: "copilota-6d94a"
+    };
+    
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
+    
+    const params = new URLSearchParams(location.search);
+    const analysisId = params.get('id');
+    
+    if (!analysisId) {
+      showError('ID analisi mancante');
+    } else {
+      loadReport(analysisId);
+    }
+    
+    function loadReport(id) {
+      const reportRef = ref(database, `ark_analisi/reports/${id}`);
+      onValue(reportRef, (snapshot) => {
+        const report = snapshot.val();
+        if (!report) {
+          showPending(id);
+          return;
+        }
+        renderReport(report, id);
+      });
+    }
+    
+    function showError(msg) {
+      document.getElementById('content').innerHTML = `
+        <div class="error">
+          <div style="font-size:60px;margin-bottom:20px">❌</div>
+          <h2>Errore</h2>
+          <p>${msg}</p>
+        </div>
+      `;
+    }
+    
+    function showPending(id) {
+      document.getElementById('content').innerHTML = `
+        <div class="pending">
+          <div class="icon">🔄</div>
+          <h2>Analisi Multi-Camera in corso...</h2>
+          <p>I 3 agenti specializzati stanno analizzando i video.</p>
+          <p style="margin-top:20px;font-size:14px;color:#666">ID: ${id}</p>
+        </div>
+      `;
+    }
+    
+    function renderReport(report, id) {
+      const overall = report.overall || 0;
+      const scores = report.scores || {};
+      const cameras = report.cameras || {};
+      
+      let overallColor = '#e94560';
+      if (overall >= 80) overallColor = '#2ecc71';
+      else if (overall >= 60) overallColor = '#f1c40f';
+      else if (overall >= 40) overallColor = '#e67e22';
+      
+      document.getElementById('content').innerHTML = `
+        <div class="score-card">
+          <div class="big-score" style="color:${overallColor}">${overall}</div>
+          <div style="font-size:18px;color:#888">Score Complessivo Multi-Camera</div>
+          <div style="margin-top:10px;font-size:14px;color:#666">
+            🎯 3 Agenti Specializzati · MediaPipe Pose
+          </div>
+        </div>
+        
+        <div class="comparison-grid">
+          <div class="comparison-card">
+            <div class="camera-name">📹 Frontale</div>
+            <div class="value" style="color:${scores.symmetry >= 80 ? '#2ecc71' : '#e67e22'}">${scores.symmetry || 0}</div>
+            <div class="label">SIMMETRIA</div>
+          </div>
+          <div class="comparison-card">
+            <div class="camera-name">📐 Laterale-DX</div>
+            <div class="value" style="color:${scores.depth >= 80 ? '#2ecc71' : '#e67e22'}">${scores.depth || 0}</div>
+            <div class="label">PROFONDITÀ</div>
+          </div>
+          <div class="comparison-card">
+            <div class="camera-name">⚖️ Laterale-SX</div>
+            <div class="value" style="color:${scores.control >= 80 ? '#2ecc71' : '#e67e22'}">${scores.control || 0}</div>
+            <div class="label">CONTROLLO</div>
+          </div>
+        </div>
+        
+        <div class="camera-tabs">
+          <button class="camera-tab active" onclick="switchCamera('all')">🔄 Confronto</button>
+          <button class="camera-tab" onclick="switchCamera('frontale')">📹 Frontale</button>
+          <button class="camera-tab" onclick="switchCamera('laterale-dx')">📐 Laterale-DX</button>
+          <button class="camera-tab" onclick="switchCamera('laterale-sx')">⚖️ Laterale-SX</button>
+        </div>
+        
+        <div id="panel-all" class="camera-panel active">
+          <div class="sync-timeline">
+            <h2>🔄 Timeline Sincronizzata</h2>
+            <div class="timeline-row">
+              <div class="timeline-label">Frontale</div>
+              <div class="timeline-bar">
+                ${cameras.frontale ? `<div class="timeline-marker" style="left:${cameras.frontale.criticalFrames?.maxAsymmetry?.time * 10 || 50}%"></div>` : ''}
+              </div>
+            </div>
+            <div class="timeline-row">
+              <div class="timeline-label">Laterale-DX</div>
+              <div class="timeline-bar">
+                ${cameras['laterale-dx'] ? `<div class="timeline-marker" style="left:${cameras['laterale-dx'].criticalFrames?.bottomPosition?.time * 10 || 50}%"></div>` : ''}
+              </div>
+            </div>
+            <div class="timeline-row">
+              <div class="timeline-label">Laterale-SX</div>
+              <div class="timeline-bar">
+                ${cameras['laterale-sx'] ? `<div class="timeline-marker" style="left:${cameras['laterale-sx'].criticalFrames?.peakVelocity?.time * 10 || 50}%"></div>` : ''}
+              </div>
+            </div>
+          </div>
+          
+          ${report.errors && report.errors.length > 0 ? `
+          <div class="section">
+            <h2>⚠️ Tutti gli Errori (${report.errors.length})</h2>
+            ${report.errors.map(err => `
+              <div class="error-item ${err.severity === 'warning' ? 'warning' : ''}">
+                <div class="title">${err.severity === 'error' ? '🔴' : '⚠️'} ${err.title} (${err.camera})</div>
+                <div class="desc">${err.description}</div>
+              </div>
+            `).join('')}
+          </div>
+          ` : ''}
+        </div>
+        
+        <div id="panel-frontale" class="camera-panel">
+          ${renderCameraPanel(cameras.frontale, 'Frontale')}
+        </div>
+        
+        <div id="panel-laterale-dx" class="camera-panel">
+          ${renderCameraPanel(cameras['laterale-dx'], 'Laterale-DX')}
+        </div>
+        
+        <div id="panel-laterale-sx" class="camera-panel">
+          ${renderCameraPanel(cameras['laterale-sx'], 'Laterale-SX')}
+        </div>
+      `;
+      
+      // Make switchCamera global
+      window.switchCamera = function(cameraId) {
+        document.querySelectorAll('.camera-tab').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.camera-panel').forEach(panel => panel.classList.remove('active'));
+        
+        event.target.classList.add('active');
+        document.getElementById(`panel-${cameraId}`).classList.add('active');
+      };
+    }
+    
+    function renderCameraPanel(cameraData, cameraName) {
+      if (!cameraData) {
+        return `<div class="section"><p>Dati camera non disponibili</p></div>`;
+      }
+      
+      return `
+        <div class="section">
+          <h2>📊 Dati ${cameraName}</h2>
+          <p><strong>Frame analizzati:</strong> ${cameraData.frameCount || 0}</p>
+          ${cameraData.errors ? `<p><strong>Errori rilevati:</strong> ${cameraData.errors.length}</p>` : ''}
+          ${cameraData.symmetry ? `<p><strong>Simmetria media:</strong> ${cameraData.symmetry.average}%</p>` : ''}
+          ${cameraData.depth ? `<p><strong>Angolo minimo:</strong> ${cameraData.depth.minAngle}° (${cameraData.depth.classification})</p>` : ''}
+          ${cameraData.velocity ? `<p><strong>Velocità eccentrica:</strong> ${cameraData.velocity.eccentric}°/s</p>` : ''}
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>
