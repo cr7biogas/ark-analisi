@@ -1,5 +1,5 @@
 /**
- * Notify API - Sends analysis request to ANALYZER with presigned URL
+ * Notify API - Calls Advanced Analyzer directly with presigned URL
  */
 
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
@@ -15,8 +15,8 @@ const R2 = new S3Client({
 });
 
 const BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME || 'fitness-app-videos';
-const BRIDGE_URL = process.env.BRIDGE_URL || 'http://187.77.96.192:3462/send';
-const BRIDGE_TARGET = process.env.BRIDGE_TARGET || '@AnaliticExercise_bot';
+const ANALYZER_URL = process.env.ANALYZER_URL || 'http://187.77.96.192:3465/analyze';
+const FIREBASE_DB_URL = process.env.FIREBASE_DATABASE_URL || 'https://copilota-6d94a-default-rtdb.firebaseio.com';
 
 /**
  * Generate presigned URL for R2 object
@@ -42,6 +42,34 @@ async function getPresignedUrl(publicUrl) {
   } catch (error) {
     console.error('Presign error:', error);
     return null;
+  }
+}
+
+/**
+ * Save analysis to Firebase Realtime Database
+ */
+async function saveToFirebase(analysisId, analysisData) {
+  try {
+    const response = await fetch(`${FIREBASE_DB_URL}/ark_analisi/reports/${analysisId}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...analysisData,
+        analysisId,
+        timestamp: Date.now(),
+        createdAt: new Date().toISOString(),
+        status: 'completed'
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Firebase save failed: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Firebase save error:', error);
+    throw error;
   }
 }
 
@@ -75,58 +103,51 @@ export default async function handler(req, res) {
     const presignedUrl = await getPresignedUrl(videoUrl);
     const accessibleUrl = presignedUrl || videoUrl;
 
-    // Build message for ANALYZER
-    const message = `🎬 ANALIZZA VIDEO ARK
-
-ID: ${analysisId}
-Atleta: ${athleteName || 'Anonimo'}
-Movimento: ${movement || 'squat'}
-Camera: ${position || 'frontale'}
-Vista: ${cameraView || position || 'frontale'}
-Durata: ${duration || '??'}
-Reps: ${reps || '1'}
-Carico: ${load || 'BW'}
-
-Score app: ${appStats?.averageScore || '--'}/100
-Errori: ${appStats?.topFaults?.map(f => f.name).join(', ') || 'nessuno'}
-
-Video: ${accessibleUrl}
-${presignedUrl ? '(URL valido per 1 ora)' : '(URL pubblico)'}
-
-ISTRUZIONI (segui PROTOCOL.md):
-1. Estrai 35 frame: POST http://172.17.0.1:3464/extract-frames
-2. Analizza OGNI frame con vision
-3. Raccogli dati: angoli, simmetria, errori
-4. Rileva outlier (variazioni >25° tra frame)
-5. Genera report completo con scores e raccomandazioni`;
-
-    // Send via Bridge
-    const bridgeRes = await fetch(BRIDGE_URL, {
+    // Call Advanced Analyzer directly
+    console.log(`[${analysisId}] Calling analyzer: ${ANALYZER_URL}`);
+    
+    const analyzerRes = await fetch(ANALYZER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        target: BRIDGE_TARGET,
-        message: message
-      })
+        videoUrl: accessibleUrl,
+        analysisId,
+        frameCount: 35
+      }),
+      signal: AbortSignal.timeout(120000) // 2 min timeout
     });
 
-    const bridgeData = await bridgeRes.json();
-    
-    if (!bridgeData.ok) {
-      throw new Error(bridgeData.error || 'Bridge failed');
+    if (!analyzerRes.ok) {
+      const errorText = await analyzerRes.text();
+      throw new Error(`Analyzer failed: ${analyzerRes.status} - ${errorText}`);
     }
 
+    const analysisResult = await analyzerRes.json();
+    
+    if (!analysisResult.success) {
+      throw new Error(analysisResult.error || 'Analysis failed');
+    }
+
+    console.log(`[${analysisId}] Analysis complete. Frames: ${analysisResult.frameCount}, Score: ${analysisResult.scores?.overall || '?'}`);
+
+    // Save to Firebase
+    await saveToFirebase(analysisId, analysisResult);
+    console.log(`[${analysisId}] Saved to Firebase`);
+
+    // Return success with report URL
     return res.status(200).json({ 
       success: true, 
-      message: 'Analysis request sent',
       analysisId,
-      presigned: !!presignedUrl
+      reportUrl: `https://ark-analisi.vercel.app/report.html?id=${analysisId}`,
+      scores: analysisResult.scores,
+      frameCount: analysisResult.frameCount,
+      method: 'MediaPipe'
     });
 
   } catch (error) {
     console.error('Notify error:', error);
     return res.status(500).json({ 
-      error: 'Notification failed', 
+      error: 'Analysis failed', 
       details: error.message 
     });
   }
