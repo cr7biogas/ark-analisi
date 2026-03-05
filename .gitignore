@@ -4,3 +4,7 @@ node_modules/
 .env
 .env.local
 .vercel
+-e 
+.env*
+.env.local
+.env.vercel
